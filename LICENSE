@@ -1,0 +1,94 @@
+Admin Redminer — Licencja (Proprietary — Homelab-Free / Commercial-Paid)
+Copyright © 2026 Krzysztof Gawkowski (www.krzysztofgawkowski.pl).
+Wszelkie prawa zastrzeżone. All rights reserved.
+
+============================================================
+WERSJA POLSKA
+============================================================
+
+1. Definicje
+   „Oprogramowanie” oznacza aplikację Admin Redminer (AR) wraz z kodem
+   źródłowym, dokumentacją, zasobami i plikami konfiguracyjnymi zawartymi w
+   tym repozytorium. „Autor” oznacza Krzysztofa Gawkowskiego. „Licencja
+   komercyjna” oznacza odpłatną, pisemną zgodę (umowę) udzieloną przez Autora.
+
+2. Charakter licencji
+   Oprogramowanie jest własnościowe (proprietary). Nie jest oprogramowaniem
+   wolnym ani open source i NIE jest objęte licencją MIT ani żadną inną
+   licencją otwartą, niezależnie od wcześniejszych wersji tego repozytorium.
+   Kod źródłowy jest udostępniony jawnie („source-available”) wyłącznie na
+   warunkach opisanych poniżej.
+
+3. Użytek prywatny / homelab — BEZPŁATNY
+   Bez odrębnej umowy Autor udziela osobie fizycznej bezpłatnego,
+   niewyłącznego i nieprzenoszalnego prawa do pobierania, instalowania,
+   uruchamiania i modyfikowania Oprogramowania NA WŁASNE, PRYWATNE,
+   NIEKOMERCYJNE potrzeby, w tym w domowym laboratorium (homelab) oraz do
+   nauki i oceny technicznej. Użytek prywatny nie może przynosić przychodu ani
+   służyć działalności zawodowej, biznesowej lub organizacyjnej.
+
+4. Użytek komercyjny — WYMAGA PŁATNEJ LICENCJI I ZGODY AUTORA
+   Jakiekolwiek wykorzystanie Oprogramowania w celach komercyjnych,
+   biznesowych, zawodowych, produkcyjnych lub w ramach jakiejkolwiek
+   organizacji (firma, instytucja, jednostka publiczna, fundacja, stowarzyszenie
+   itp.) — w tym uruchamianie go na potrzeby pracodawcy lub klienta,
+   świadczenie z jego użyciem usług oraz wdrażanie u osób trzecich — wymaga
+   UPRZEDNIEGO uzyskania ważnej, płatnej Licencji komercyjnej oraz pisemnej
+   zgody Autora.
+
+5. Zakazy (bez ważnej Licencji komercyjnej)
+   Zabrania się w szczególności:
+   a) używania Oprogramowania w środowisku produkcyjnym, komercyjnym lub w
+      ramach organizacji (patrz pkt 4);
+   b) odsprzedaży, wynajmu, użyczania ani sublicencjonowania Oprogramowania lub
+      jego części;
+   c) udostępniania Oprogramowania jako usługi (SaaS/hosting) osobom trzecim;
+   d) usuwania lub zmieniania informacji o prawach autorskich i o licencji;
+   e) rozpowszechniania zmodyfikowanych wersji Oprogramowania (forki mogą służyć
+      wyłącznie prywatnemu użytkowi z pkt 3; publiczna redystrybucja wymaga
+      zgody Autora).
+
+6. Prawa autorskie
+   Autor zachowuje pełnię autorskich praw majątkowych do Oprogramowania.
+   Niniejszy dokument nie przenosi żadnych praw własności.
+
+7. Zakup licencji / kontakt
+   W sprawie zakupu Licencji komercyjnej, warunków cenowych i zgód należy
+   kontaktować się z Autorem: www.krzysztofgawkowski.pl
+
+8. Brak gwarancji
+   OPROGRAMOWANIE DOSTARCZANE JEST „TAK JAK JEST” (AS IS), BEZ JAKICHKOLWIEK
+   GWARANCJI. W MAKSYMALNYM ZAKRESIE DOZWOLONYM PRAWEM AUTOR NIE PONOSI
+   ODPOWIEDZIALNOŚCI ZA JAKIEKOLWIEK SZKODY WYNIKŁE Z UŻYCIA OPROGRAMOWANIA.
+
+============================================================
+ENGLISH VERSION
+============================================================
+
+This software (Admin Redminer) is proprietary and source-available. It is NOT
+open source and is NOT licensed under the MIT License or any other open-source
+license.
+
+FREE — Private / homelab use: an individual is granted a free, non-exclusive,
+non-transferable right to download, install, run and modify the Software for
+their OWN PRIVATE, NON-COMMERCIAL purposes, including a home lab (homelab), and
+for learning and technical evaluation. Private use may not generate revenue or
+serve any professional, business or organizational activity.
+
+PAID — Commercial use: any commercial, business, professional or production
+use, or any use within an organization (company, institution, public body,
+non-profit, etc.) — including running it for an employer or a client, providing
+services with it, or deploying it for third parties — requires a valid, paid
+Commercial License AND the written permission of the author, obtained in
+advance.
+
+Reselling, renting, sublicensing, offering the Software as a service (SaaS) to
+third parties, redistributing modified versions publicly, and removing the
+copyright or license notices are prohibited without a valid Commercial License.
+
+To purchase a Commercial License or request permission, contact the author:
+www.krzysztofgawkowski.pl
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. TO THE MAXIMUM
+EXTENT PERMITTED BY LAW THE AUTHOR SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING
+FROM THE USE OF THE SOFTWARE.

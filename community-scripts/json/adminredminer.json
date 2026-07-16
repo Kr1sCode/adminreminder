@@ -1,0 +1,44 @@
+{
+  "name": "Admin Redminer",
+  "slug": "adminredminer",
+  "categories": [
+    9
+  ],
+  "date_created": "2026-07-16",
+  "type": "ct",
+  "updateable": true,
+  "privileged": false,
+  "interface_port": 3000,
+  "documentation": "https://github.com/Kr1sCode/adminredminer",
+  "website": "https://www.krzysztofgawkowski.pl",
+  "logo": null,
+  "config_path": "/opt/adminredminer/.env",
+  "description": "Admin Redminer to samodzielnie hostowany monitor terminów ważności dla administratorów: certyfikaty HTTPS, punkty TLS (LDAPS/usługi), gwarancje sprzętu, sekrety i certyfikaty Entra/Azure, tokeny API, licencje i rejestracje domen. Next.js + SQLite, powiadomienia e-mail/webhook, MFA, role, integracja AD/Entra.",
+  "install_methods": [
+    {
+      "type": "default",
+      "script": "ct/adminredminer.sh",
+      "resources": {
+        "cpu": 2,
+        "ram": 2048,
+        "hdd": 8,
+        "os": "debian",
+        "version": "13"
+      }
+    }
+  ],
+  "default_credentials": {
+    "username": null,
+    "password": null
+  },
+  "notes": [
+    {
+      "text": "Przy pierwszym otwarciu aplikacja poprosi o utworzenie konta administratora (pusta baza).",
+      "type": "info"
+    },
+    {
+      "text": "Aplikacja jest proprietary (source-available): homelab/prywatnie bezpłatnie, użytek komercyjny wymaga płatnej licencji — patrz LICENSE.",
+      "type": "warning"
+    }
+  ]
+}

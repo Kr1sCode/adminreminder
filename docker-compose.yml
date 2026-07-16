@@ -1,0 +1,41 @@
+# Without this, Compose derives the project name from the directory ("ar") and
+# prefixes every container, network and volume with it.
+name: adminredminer
+
+services:
+  app:
+    build: .
+    image: adminredminer:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist the SQLite database (and its WAL/SHM sidecars) across restarts.
+      # A named volume rather than a bind mount: it inherits the image's
+      # ownership of /app/data, so the unprivileged container user can write.
+      - ar-data:/app/data
+    environment:
+      - DATABASE_URL=/app/data/ar.db
+      - NODE_ENV=production
+      # The built-in scheduler evaluates the cron in this timezone, so "08:00
+      # daily" means local, not UTC. Override in .env if the operator differs.
+      - TZ=${TZ:-Europe/Warsaw}
+      # The ":?" form makes `docker compose up` FAIL if the variable is unset,
+      # so a deployment can never accidentally run with a placeholder secret.
+      # Put the real values in a .env file next to this compose file:
+      #   JWT_SECRET=$(openssl rand -base64 48)
+      #   SETTINGS_KEY=$(openssl rand -base64 32)
+      #   CRON_SECRET=$(openssl rand -base64 32)
+      - JWT_SECRET=${JWT_SECRET:?ustaw JWT_SECRET w .env (openssl rand -base64 48)}
+      - SETTINGS_KEY=${SETTINGS_KEY:?ustaw SETTINGS_KEY w .env (openssl rand -base64 32)}
+      - CRON_SECRET=${CRON_SECRET:?ustaw CRON_SECRET w .env (openssl rand -base64 32)}
+    restart: unless-stopped
+    healthcheck:
+      # Next standalone serves /login without auth; 200 means the app is up.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  ar-data:

@@ -1,0 +1,134 @@
+# Production stack. Use explicitly, so a stray `docker compose up` in this
+# directory can never start the production configuration by accident:
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Build on the target host. better-sqlite3 and argon2 are native modules
+# compiled against musl and the host architecture; an image built elsewhere may
+# fail to load them at runtime.
+name: adminredminer
+
+services:
+  app:
+    build: .
+    image: adminredminer:latest
+
+    # Bound to loopback: the container speaks plain HTTP and next.config.ts emits
+    # HSTS, which only makes sense behind a reverse proxy terminating TLS.
+    # Publishing 0.0.0.0:3000 would expose the app unencrypted.
+    ports:
+      - "127.0.0.1:3000:3000"
+
+    volumes:
+      - ar-data:/app/data
+      # LDAPS trust anchor. lib/ad/client.ts reads this path *inside* the
+      # container, so the file has to be mounted. Uncomment together with
+      # AD_CA_CERT_PATH below.
+      # - /etc/ssl/certs/firma-ca.crt:/app/certs/ca.crt:ro
+
+    # A container does not inherit the host resolver. Put the internal DNS first:
+    # on NXDOMAIN a resolver does not fall through to the next server, so a public
+    # resolver in front would make every *.firma.local lookup fail.
+    # Set INTERNAL_DNS to the domain controller / internal resolver when using AD.
+    dns:
+      - ${INTERNAL_DNS:-1.1.1.1}
+      - 8.8.8.8
+
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=/app/data/ar.db
+      - TZ=${TZ:-Europe/Warsaw}
+
+      # The ":?" form fails `up` rather than starting with a placeholder secret.
+      #   JWT_SECRET=$(openssl rand -base64 48)
+      #   SETTINGS_KEY=$(openssl rand -base64 32)
+      #   CRON_SECRET=$(openssl rand -base64 32)
+      - JWT_SECRET=${JWT_SECRET:?ustaw JWT_SECRET w .env (openssl rand -base64 48)}
+      # Keep SETTINGS_KEY separate from JWT_SECRET: it encrypts the SMTP, Azure,
+      # AD and Google secrets stored in the settings table. Derived from
+      # JWT_SECRET when unset, which makes rotating JWT_SECRET destroy them.
+      - SETTINGS_KEY=${SETTINGS_KEY:?ustaw SETTINGS_KEY w .env (openssl rand -base64 32)}
+      - CRON_SECRET=${CRON_SECRET:?ustaw CRON_SECRET w .env (openssl rand -base64 32)}
+
+      # Public address, no trailing slash. Used for links in notification e-mails;
+      # without it the app falls back to the forwarded headers.
+      - APP_ORIGIN=${APP_ORIGIN:?ustaw APP_ORIGIN w .env (np. https://ar.firma.pl)}
+
+      # Entra ID (Microsoft Graph). Outbound 443 only. Application permissions
+      # with admin consent: Application.Read.All, User.Read.All, Domain.Read.All.
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID:-}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID:-}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET:-}
+
+      # Active Directory over LDAPS. The app refuses plain ldap:// unless
+      # AD_ALLOW_INSECURE is set — leave it unset, passwords travel this link.
+      - AD_URL=${AD_URL:-}
+      - AD_START_TLS=${AD_START_TLS:-false}
+      - AD_CA_CERT_PATH=${AD_CA_CERT_PATH:-}
+      - AD_BIND_DN=${AD_BIND_DN:-}
+      - AD_BIND_PASSWORD=${AD_BIND_PASSWORD:-}
+      - AD_BASE_DN=${AD_BASE_DN:-}
+      - AD_ADMIN_GROUP_DN=${AD_ADMIN_GROUP_DN:-}
+      - AD_VIEWER_GROUP_DN=${AD_VIEWER_GROUP_DN:-}
+      - AD_TIMEOUT_MS=${AD_TIMEOUT_MS:-10000}
+
+    restart: always
+    stop_grace_period: 20s
+
+    # The process is already unprivileged (USER nextjs, uid 1001); this stops it
+    # from regaining privileges through a setuid binary.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    healthcheck:
+      # /login is served without auth; 200 means the app is up.
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/login"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    # Without a cap the JSON log file grows until the disk is full.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Opt-in scheduler: nothing calls the cron endpoint on its own.
+  #   docker compose -f docker-compose.prod.yml --profile cron up -d
+  # Prefer a systemd timer if you already run one; this exists so the stack is
+  # self-contained on a host without one.
+  cron:
+    profiles: ["cron"]
+    image: curlimages/curl:8.11.1
+    restart: always
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      - CRON_SECRET=${CRON_SECRET:?}
+      - CRON_INTERVAL_SECONDS=${CRON_INTERVAL_SECONDS:-21600}
+    # Reaches the app over the compose network, so the loopback port binding
+    # above does not get in the way. A failed run is logged, never fatal.
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          curl -fsS --max-time 300 \
+            -H "Authorization: Bearer $${CRON_SECRET}" \
+            http://app:3000/api/cron/check-and-notify \
+            || echo "[cron] wywołanie nie powiodło się: $$(date -Iseconds)"
+          sleep "$${CRON_INTERVAL_SECONDS}"
+        done
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  ar-data:
