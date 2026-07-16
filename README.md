@@ -5,6 +5,10 @@ Concept & build: [www.krzysztofgawkowski.pl](https://www.krzysztofgawkowski.pl)
 
 **English** · [Polski](README.pl.md)
 
+> **Live demo:** **https://adminredminer.krzysztofgawkowski.pl** — log in with
+> `demo` / `demo123`. The demo is read-only (it shows sample data across every
+> item type and settings tab).
+
 Admin Redminer (AR) helps administrators keep track of expiry and renewal dates
 in one fast, good-looking place — instead of a list in SharePoint or Excel:
 

@@ -5,6 +5,10 @@ Pomysł i wykonanie: [www.krzysztofgawkowski.pl](https://www.krzysztofgawkowski.
 
 [English](README.md) · **Polski**
 
+> **Demo na żywo:** **https://adminredminer.krzysztofgawkowski.pl** — zaloguj się
+> `demo` / `demo123`. Demo działa w trybie tylko do odczytu (pokazuje przykładowe
+> dane dla każdego typu pozycji i zakładek ustawień).
+
 Admin Redminer (AR) pomaga administratorom śledzić terminy ważności i odnowień w
 jednym, szybkim i ładnym miejscu — zamiast listy w SharePoint czy Excelu:
 
