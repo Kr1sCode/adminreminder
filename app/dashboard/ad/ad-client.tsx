@@ -192,11 +192,14 @@ export function AdClient({
       }
     }
 
+    // load() clears the error state, so it has to run before the messages are set —
+    // otherwise a failed sync leaves the cached list on screen and looks like a success.
+    await load();
+
     if (errors.length) setError(errors.join(" · "));
     if (parts.length) setNotice(t("adp.syncedNotice", { parts: parts.join(" · ") }));
     else if (!errors.length) setError(t("adp.noneConfigured"));
 
-    await load();
     setSyncing(false);
   }
 

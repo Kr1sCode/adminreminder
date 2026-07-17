@@ -64,6 +64,82 @@ interface ApiKeyRow {
   createdAt: string | Date;
 }
 
+/**
+ * These three live at module scope on purpose. Defined inside SettingsClient they
+ * were a fresh component type on every render, so React unmounted and remounted
+ * their subtree — which cost SecretInput its focus after each keystroke.
+ */
+type Getter = (key: string, fallback?: string) => string;
+type Setter = (key: string, value: string) => void;
+type Translate = ReturnType<typeof useT>;
+
+/** A secret field shows the mask when stored; sending it back leaves it untouched. */
+function SecretInput({
+  k, placeholder, get, set, t,
+}: { k: string; placeholder?: string; get: Getter; set: Setter; t: Translate }) {
+  return (
+    <>
+      <Input
+        type="password"
+        value={get(k)}
+        onChange={(e) => set(k, e.target.value)}
+        placeholder={placeholder}
+        className="mt-2 font-mono"
+      />
+      <p className="text-xs text-muted-foreground mt-1">
+        {get(k) === MASK ? t("set.secretStored") : t("set.secretWillEncrypt")}
+      </p>
+    </>
+  );
+}
+
+function Checkbox({
+  k, label, get, set,
+}: { k: string; label: string; get: Getter; set: Setter }) {
+  return (
+    <label className="flex items-center gap-3 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={get(k) === "true"}
+        onChange={(e) => set(k, e.target.checked ? "true" : "false")}
+        className="h-4 w-4 accent-emerald-500"
+      />
+      <span className="text-sm">{label}</span>
+    </label>
+  );
+}
+
+function SaveBar({
+  label, saving, feedback, onSave, t,
+}: {
+  label?: string;
+  saving: boolean;
+  feedback: { kind: string; text: string } | null;
+  onSave: () => void;
+  t: Translate;
+}) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <Button onClick={onSave} disabled={saving} className="bg-emerald-500 hover:bg-emerald-600 text-black">
+        <Save className="h-4 w-4 mr-2" />
+        {saving ? t("set.saving") : (label ?? t("set.save"))}
+      </Button>
+      {feedback && (
+        <span
+          className={`flex items-center gap-1.5 text-sm ${
+            feedback.kind === "ok"
+              ? "text-emerald-600 dark:text-emerald-400"
+              : "text-red-600 dark:text-red-400"
+          }`}
+        >
+          {feedback.kind === "ok" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+          {feedback.text}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function SettingsClient({ initialSettings, initialUsers, currentAdminId }: Props) {
   const t = useT();
   const { locale } = useI18n();
@@ -438,55 +514,6 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
     }
   }
 
-  /** A secret field shows the mask when stored; sending it back leaves it untouched. */
-  const SecretInput = ({ k, placeholder }: { k: string; placeholder?: string }) => (
-    <>
-      <Input
-        type="password"
-        value={get(k)}
-        onChange={(e) => set(k, e.target.value)}
-        placeholder={placeholder}
-        className="mt-2 font-mono"
-      />
-      <p className="text-xs text-muted-foreground mt-1">
-        {get(k) === MASK ? t("set.secretStored") : t("set.secretWillEncrypt")}
-      </p>
-    </>
-  );
-
-  const Checkbox = ({ k, label }: { k: string; label: string }) => (
-    <label className="flex items-center gap-3 cursor-pointer">
-      <input
-        type="checkbox"
-        checked={get(k) === "true"}
-        onChange={(e) => set(k, e.target.checked ? "true" : "false")}
-        className="h-4 w-4 accent-emerald-500"
-      />
-      <span className="text-sm">{label}</span>
-    </label>
-  );
-
-  const SaveBar = ({ label }: { label?: string }) => (
-    <div className="flex items-center gap-3 pt-2">
-      <Button onClick={() => saveSettings()} disabled={saving} className="bg-emerald-500 hover:bg-emerald-600 text-black">
-        <Save className="h-4 w-4 mr-2" />
-        {saving ? t("set.saving") : (label ?? t("set.save"))}
-      </Button>
-      {feedback && (
-        <span
-          className={`flex items-center gap-1.5 text-sm ${
-            feedback.kind === "ok"
-              ? "text-emerald-600 dark:text-emerald-400"
-              : "text-red-600 dark:text-red-400"
-          }`}
-        >
-          {feedback.kind === "ok" ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
-          {feedback.text}
-        </span>
-      )}
-    </div>
-  );
-
   const adInsecure = get("ad_url").startsWith("ldap://") && get("ad_start_tls") !== "true";
 
   return (
@@ -524,7 +551,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                   <p className="text-xs text-muted-foreground mt-1">{t("set.gen.urgentHint")}</p>
                 </div>
               </div>
-              <SaveBar label={t("set.gen.saveThresholds")} />
+              <SaveBar label={t("set.gen.saveThresholds")} saving={saving} feedback={feedback} onSave={() => saveSettings()} t={t} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -537,7 +564,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
               <CardDescription>{t("set.notif.desc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <Checkbox k="notifications_enabled" label={t("set.notif.enable")} />
+              <Checkbox k="notifications_enabled" label={t("set.notif.enable")} get={get} set={set} />
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -596,7 +623,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                 {get("email_provider", "resend") === "resend" && (
                   <div>
                     <Label>Resend API Key</Label>
-                    <SecretInput k="resend_api_key" placeholder="re_xxxxxxxxxxxxxxxx" />
+                    <SecretInput k="resend_api_key" placeholder="re_xxxxxxxxxxxxxxxx" get={get} set={set} t={t} />
                   </div>
                 )}
                 {get("email_provider", "resend") === "smtp" && (
@@ -616,7 +643,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                     </div>
                     <div>
                       <Label>{t("set.notif.smtpPass")}</Label>
-                      <SecretInput k="smtp_pass" />
+                      <SecretInput k="smtp_pass" get={get} set={set} t={t} />
                     </div>
                   </>
                 )}
@@ -672,7 +699,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                 </div>
                 <div className="md:col-span-2">
                   <Label>Client Secret</Label>
-                  <SecretInput k="azure_client_secret" />
+                  <SecretInput k="azure_client_secret" get={get} set={set} t={t} />
                 </div>
               </div>
 
@@ -738,14 +765,14 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                 </div>
                 <div>
                   <Label>{t("set.ad.bindPassLabel")}</Label>
-                  <SecretInput k="ad_bind_password" />
+                  <SecretInput k="ad_bind_password" get={get} set={set} t={t} />
                 </div>
               </div>
 
               <div className="space-y-3 border-t border-border pt-4">
                 <div className="text-sm font-medium">{t("set.ad.encryption")}</div>
-                <Checkbox k="ad_start_tls" label={t("set.ad.startTls")} />
-                <Checkbox k="ad_allow_insecure" label={t("set.ad.allowInsecure")} />
+                <Checkbox k="ad_start_tls" label={t("set.ad.startTls")} get={get} set={set} />
+                <Checkbox k="ad_allow_insecure" label={t("set.ad.allowInsecure")} get={get} set={set} />
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox"
                     checked={get("ad_tls_reject_unauthorized", "true") !== "false"}
@@ -817,7 +844,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                     placeholder="CN=AR-Viewers,OU=Groups,DC=corp,DC=local" className="mt-2 font-mono" />
                 </div>
               </div>
-              <SaveBar />
+              <SaveBar saving={saving} feedback={feedback} onSave={() => saveSettings()} t={t} />
             </CardContent>
           </Card>
 
@@ -847,7 +874,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">{t("set.ad.notifFooter")}</p>
-              <SaveBar label={t("set.ad.saveNotif")} />
+              <SaveBar label={t("set.ad.saveNotif")} saving={saving} feedback={feedback} onSave={() => saveSettings()} t={t} />
             </CardContent>
           </Card>
 
@@ -881,7 +908,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">{t("set.ad.classFooter")}</p>
-              <SaveBar label={t("set.ad.saveRules")} />
+              <SaveBar label={t("set.ad.saveRules")} saving={saving} feedback={feedback} onSave={() => saveSettings()} t={t} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -970,7 +997,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
               <CardDescription>{t("set.api.webhookDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <Checkbox k="webhook_enabled" label={t("set.api.webhookEnable")} />
+              <Checkbox k="webhook_enabled" label={t("set.api.webhookEnable")} get={get} set={set} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
                   <Label>{t("set.api.webhookUrl")}</Label>
@@ -979,7 +1006,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                 </div>
                 <div className="md:col-span-2">
                   <Label>{t("set.api.webhookSecret")}</Label>
-                  <SecretInput k="webhook_secret" />
+                  <SecretInput k="webhook_secret" get={get} set={set} t={t} />
                 </div>
               </div>
               <div className="flex flex-wrap gap-3">
