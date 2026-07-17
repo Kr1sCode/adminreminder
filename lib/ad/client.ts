@@ -9,6 +9,42 @@ export class AdError extends Error {
   }
 }
 
+/**
+ * AD answers every failed bind with the same LDAP code 49, and hides the real
+ * reason in a "data <hex>" sub-code inside the message. Without it, a disabled
+ * account and a wrong password look identical, which sends people hunting for a
+ * typo in a password that was never the problem.
+ */
+const BIND_REASONS: Record<string, string> = {
+  "525": "konto o podanym DN nie istnieje w katalogu — sprawdź DN konta serwisowego",
+  "52e": "kontroler odrzucił hasło — sprawdź hasło konta serwisowego",
+  "530": "konto nie ma prawa logować się o tej porze",
+  "531": "konto nie ma prawa logować się z tej stacji",
+  "532": "hasło konta wygasło — ustaw nowe i włącz „Password never expires”",
+  "533": "konto jest wyłączone w AD — włącz je (ADUC → konto → Enable Account)",
+  "701": "konto wygasło (Account expires)",
+  "773":
+    "konto ma zaznaczone „User must change password at next logon” — odznacz to " +
+    "(ADUC → konto → Account) i włącz „Password never expires”; konto serwisowe " +
+    "nigdy nie zmieni hasła interaktywnie",
+  "775": "konto jest zablokowane po nieudanych logowaniach (Account locked out)",
+};
+
+export function bindFailureMessage(err: unknown): string {
+  const kod = String((err as Error)?.message ?? "").match(/data ([0-9a-f]{3})/i)?.[1]?.toLowerCase();
+  const powod = kod ? BIND_REASONS[kod] : undefined;
+
+  if (powod) {
+    return `Nie udało się zalogować kontem serwisowym do AD: ${powod}. ` +
+      `(kod AD ${kod}) Po poprawce użyj „Testuj połączenie” w Ustawieniach → Active Directory.`;
+  }
+  return (
+    "Nie udało się zalogować kontem serwisowym do AD. Sprawdź DN i hasło konta w " +
+    "Ustawieniach → Active Directory i użyj „Testuj połączenie”. " +
+    "(Jeśli konfigurujesz przez środowisko: AD_BIND_DN i AD_BIND_PASSWORD.)"
+  );
+}
+
 function tlsOptions(config: AdConfig) {
   return {
     rejectUnauthorized: config.rejectUnauthorized,
@@ -54,10 +90,7 @@ export async function withServiceBind<T>(
     await client.bind(config.bindDn, config.bindPassword);
   } catch (err) {
     await client.unbind().catch(() => {});
-    throw new AdError(
-      "Nie udało się zalogować kontem serwisowym do AD. Sprawdź AD_BIND_DN i AD_BIND_PASSWORD.",
-      err
-    );
+    throw new AdError(bindFailureMessage(err), err);
   }
 
   try {
