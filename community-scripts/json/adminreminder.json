@@ -1,6 +1,6 @@
 {
-  "name": "Admin Redminer",
-  "slug": "adminredminer",
+  "name": "AdminReminder",
+  "slug": "adminreminder",
   "categories": [
     9
   ],
@@ -9,15 +9,15 @@
   "updateable": true,
   "privileged": false,
   "interface_port": 3000,
-  "documentation": "https://github.com/Kr1sCode/adminredminer",
+  "documentation": "https://github.com/Kr1sCode/adminreminder",
   "website": "https://www.krzysztofgawkowski.pl",
   "logo": null,
-  "config_path": "/opt/adminredminer/.env",
-  "description": "Admin Redminer to samodzielnie hostowany monitor terminów ważności dla administratorów: certyfikaty HTTPS, punkty TLS (LDAPS/usługi), gwarancje sprzętu, sekrety i certyfikaty Entra/Azure, tokeny API, licencje i rejestracje domen. Next.js + SQLite, powiadomienia e-mail/webhook, MFA, role, integracja AD/Entra.",
+  "config_path": "/opt/adminreminder/.env",
+  "description": "AdminReminder to samodzielnie hostowany monitor terminów ważności dla administratorów: certyfikaty HTTPS, punkty TLS (LDAPS/usługi), gwarancje sprzętu, sekrety i certyfikaty Entra/Azure, tokeny API, licencje i rejestracje domen. Next.js + SQLite, powiadomienia e-mail/webhook, MFA, role, integracja AD/Entra.",
   "install_methods": [
     {
       "type": "default",
-      "script": "ct/adminredminer.sh",
+      "script": "ct/adminreminder.sh",
       "resources": {
         "cpu": 2,
         "ram": 2048,

@@ -4,7 +4,7 @@
  * tolerable configuration.
  */
 
-const DEV_JWT_DEFAULT = "ar-admin-redminer-dev-secret-change-in-production-please";
+const DEV_JWT_DEFAULT = "ar-adminreminder-dev-secret-change-in-production-please";
 
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;

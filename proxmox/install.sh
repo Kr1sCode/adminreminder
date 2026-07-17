@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
-# Admin Redminer — instalator LXC dla Proxmox VE (styl community-scripts)
+# AdminReminder — instalator LXC dla Proxmox VE (styl community-scripts)
 # Uruchamiany NA HOŚCIE Proxmox. Tworzy nieuprzywilejowany kontener Debian 13,
 # instaluje natywnie Node.js + aplikację, zakłada PUSTĄ bazę SQLite i usługę
 # systemd. Bez Dockera, bez nestingu.
 #
-#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kr1sCode/adminredminer/main/proxmox/install.sh)"
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kr1sCode/adminreminder/main/proxmox/install.sh)"
 #
 # Copyright © 2026 Krzysztof Gawkowski — www.krzysztofgawkowski.pl
 # Licencja: patrz plik LICENSE (homelab-free / commercial-paid).
@@ -39,16 +39,16 @@ header() {
  / ___ \ (_| | | | | | | | | | | |  _ <  __/ (_| | | | | | | | | | |  __/ |
 /_/   \_\__,_|_| |_| |_|_|_| |_| |_| \_\___|\__,_|_| |_| |_|_|_| |_|\___|_|
 
-   Admin Redminer — monitor terminów ważności — self-host LXC installer
+   AdminReminder — monitor terminów ważności — self-host LXC installer
 EOF
   echo
 }
 
 # --------------------------------------------------------------- ustawienia ---
-APP="adminredminer"
+APP="adminreminder"
 var_os="debian"
 var_version="13"
-var_hostname="${AR_HOSTNAME:-adminredminer}"
+var_hostname="${AR_HOSTNAME:-adminreminder}"
 var_disk="${AR_DISK:-8}"          # GB
 var_cpu="${AR_CPU:-2}"
 var_ram="${AR_RAM:-2048}"         # MB
@@ -64,7 +64,7 @@ var_gw="${AR_GW:-}"
 var_ns="${AR_NS:-}"
 
 # Źródło aplikacji (nadpisywalne środowiskiem — używane przy testach):
-AR_REPO_URL="${AR_REPO_URL:-https://github.com/Kr1sCode/adminredminer}"
+AR_REPO_URL="${AR_REPO_URL:-https://github.com/Kr1sCode/adminreminder}"
 AR_REPO_BRANCH="${AR_REPO_BRANCH:-main}"
 AR_SRC_TARBALL="${AR_SRC_TARBALL:-}"   # jeśli ustawione: lokalny tar.gz zamiast git clone
 
@@ -94,7 +94,7 @@ choose_settings() {
     return
   fi
   if ! command -v whiptail >/dev/null 2>&1; then return; fi
-  if whiptail --title "Admin Redminer LXC" \
+  if whiptail --title "AdminReminder LXC" \
       --yesno "Użyć ustawień domyślnych?\n\n  OS: Debian ${var_version}\n  Hostname: ${var_hostname}\n  CPU: ${var_cpu}   RAM: ${var_ram} MB   Dysk: ${var_disk} GB\n  Sieć: ${var_bridge} (DHCP)\n  Nieuprzywilejowany: tak\n  Port aplikacji: ${var_app_port}" \
       18 70; then
     return
@@ -180,7 +180,7 @@ push_installer() {
 #!/usr/bin/env bash
 set -Eeuo pipefail
 export DEBIAN_FRONTEND=noninteractive
-APP_DIR=/opt/adminredminer
+APP_DIR=/opt/adminreminder
 APP_PORT="${var_app_port}"
 REPO_URL="${AR_REPO_URL}"
 REPO_BRANCH="${AR_REPO_BRANCH}"
@@ -234,9 +234,9 @@ set -a; . "\$APP_DIR/.env"; set +a
 node "\$APP_DIR/scripts/init-db.js"
 
 echo "[ct] usługa systemd"
-cat > /etc/systemd/system/adminredminer.service <<SVCEOF
+cat > /etc/systemd/system/adminreminder.service <<SVCEOF
 [Unit]
-Description=Admin Redminer
+Description=AdminReminder
 After=network-online.target
 Wants=network-online.target
 
@@ -257,17 +257,17 @@ echo "[ct] skrypt aktualizacji /usr/bin/update"
 cat > /usr/bin/update <<UPDEOF
 #!/usr/bin/env bash
 set -e
-cd /opt/adminredminer
+cd /opt/adminreminder
 git pull --ff-only || echo "(instalacja z tarballa — pomijam git pull)"
 npm ci --no-audit --no-fund
 NEXT_TELEMETRY_DISABLED=1 npm run build
-systemctl restart adminredminer
-echo "Zaktualizowano Admin Redminer."
+systemctl restart adminreminder
+echo "Zaktualizowano AdminReminder."
 UPDEOF
 chmod +x /usr/bin/update
 
 systemctl daemon-reload
-systemctl enable --now adminredminer >/dev/null 2>&1
+systemctl enable --now adminreminder >/dev/null 2>&1
 
 echo "[ct] czekam na start usługi na porcie \$APP_PORT"
 for i in \$(seq 1 30); do
@@ -298,7 +298,7 @@ run_installer() {
 finish() {
   local ip; ip=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}')
   echo
-  echo -e " ${CM} ${GN}Admin Redminer gotowy!${CL}"
+  echo -e " ${CM} ${GN}AdminReminder gotowy!${CL}"
   echo -e "    CTID:  ${BL}${CTID}${CL}"
   echo -e "    URL:   ${BL}http://${ip}:${var_app_port}${CL}"
   echo -e "    Pierwsze logowanie: otwórz URL i utwórz konto administratora."

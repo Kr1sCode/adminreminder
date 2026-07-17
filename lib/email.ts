@@ -14,7 +14,7 @@ export async function getEmailConfig() {
   const days = daysStr.split(",").map(d => parseInt(d.trim())).filter(Boolean);
   const provider = await getSetting("email_provider", "resend"); // "resend" | "smtp"
 
-  const from = await getSetting("email_from", "AR <noreply@admin-redminer.local>") || "AR <noreply@admin-redminer.local>";
+  const from = await getSetting("email_from", "AR <noreply@adminreminder.local>") || "AR <noreply@adminreminder.local>";
   const resendKey = await getSetting("resend_api_key", "");
   const smtpHost = await getSetting("smtp_host", "");
   const smtpPort = parseInt(await getSetting("smtp_port", "587") || "587");

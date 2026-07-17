@@ -326,7 +326,7 @@ export const fr: Messages = {
   "login.firstRunHint": "Ce compte disposera de tous les droits (administrateur).",
   "login.minChars": "6 caractères minimum",
   "login.error.connection": "Serveur injoignable",
-  "app.tagline": "Admin Redminer — moniteur d’échéances, par un admin pour les admins. Idée et réalisation : www.krzysztofgawkowski.pl",
+  "app.tagline": "AdminReminder — moniteur d’échéances, par un admin pour les admins. Idée et réalisation : www.krzysztofgawkowski.pl",
 
   "notif.title": "Notifications",
   "notif.mutedUntil": "Notifications désactivées jusqu’au {date}",

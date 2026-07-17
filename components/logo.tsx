@@ -42,7 +42,7 @@ export function Logo({ size = "md", className, showTagline = false }: LogoProps)
       </div>
       <div className="flex flex-col leading-none">
         <span className={cn("font-semibold tracking-[-0.6px] text-foreground", s.text)}>
-          Admin Redminer
+          AdminReminder
         </span>
         {showTagline && (
           <span className="text-[10px] text-muted-foreground mt-0.5 tracking-normal">

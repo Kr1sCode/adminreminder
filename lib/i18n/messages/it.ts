@@ -326,7 +326,7 @@ export const it: Messages = {
   "login.firstRunHint": "Questo account avrà privilegi completi (amministratore).",
   "login.minChars": "Almeno 6 caratteri",
   "login.error.connection": "Server non raggiungibile",
-  "app.tagline": "Admin Redminer — monitor delle scadenze, da un admin per gli admin. Idea e realizzazione: www.krzysztofgawkowski.pl",
+  "app.tagline": "AdminReminder — monitor delle scadenze, da un admin per gli admin. Idea e realizzazione: www.krzysztofgawkowski.pl",
 
   "notif.title": "Notifiche",
   "notif.mutedUntil": "Notifiche silenziate fino al {date}",

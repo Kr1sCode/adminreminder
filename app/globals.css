@@ -167,7 +167,7 @@ label, .text-sm.font-medium {
   letter-spacing: -0.01em;
 }
 
-/* ===== AR (Admin Redminer) custom polish ===== */
+/* ===== AR (AdminReminder) custom polish ===== */
 :root {
   --primary: oklch(0.65 0.22 145);
   --primary-foreground: oklch(0.985 0 0);

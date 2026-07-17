@@ -590,7 +590,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                 <div>
                   <Label>{t("set.notif.fromLabel")}</Label>
                   <Input value={get("email_from")} onChange={(e) => set("email_from", e.target.value)}
-                    placeholder="AR <ar@admin-redminer.local>" className="mt-2" />
+                    placeholder="AR <ar@adminreminder.local>" className="mt-2" />
                 </div>
 
                 {get("email_provider", "resend") === "resend" && (

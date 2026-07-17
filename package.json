@@ -1,7 +1,7 @@
 {
   "name": "ar",
-  "version": "1.0.0",
-  "description": "Admin Redminer – monitor ważności od admina dla admina. Pomysł i wykonanie: www.krzysztofgawkowski.pl",
+  "version": "1.1.0",
+  "description": "AdminReminder – monitor ważności od admina dla admina. Pomysł i wykonanie: www.krzysztofgawkowski.pl",
   "author": "Krzysztof Gawkowski (www.krzysztofgawkowski.pl)",
   "license": "SEE LICENSE IN LICENSE",
   "private": true,

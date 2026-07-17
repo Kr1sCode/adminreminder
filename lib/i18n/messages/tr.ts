@@ -326,7 +326,7 @@ export const tr: Messages = {
   "login.firstRunHint": "Bu hesap tam yetkiye sahip olacak (yönetici).",
   "login.minChars": "En az 6 karakter",
   "login.error.connection": "Sunucuya ulaşılamıyor",
-  "app.tagline": "Admin Redminer — yöneticiden yöneticilere süre takibi. Fikir ve geliştirme: www.krzysztofgawkowski.pl",
+  "app.tagline": "AdminReminder — yöneticiden yöneticilere süre takibi. Fikir ve geliştirme: www.krzysztofgawkowski.pl",
 
   "notif.title": "Bildirimler",
   "notif.mutedUntil": "Bildirimler {date} tarihine kadar susturuldu",

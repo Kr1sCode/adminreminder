@@ -95,7 +95,7 @@ export function verifyTotp(secret: string, token: string, window = 1): boolean {
  * The otpauth:// URI encoded into the enrolment QR. `label` identifies the
  * account (shown in the app), `issuer` names the service.
  */
-export function otpauthUri(secret: string, label: string, issuer = "Admin Redminer"): string {
+export function otpauthUri(secret: string, label: string, issuer = "AdminReminder"): string {
   const enc = encodeURIComponent;
   const account = `${issuer}:${label}`;
   const params = new URLSearchParams({

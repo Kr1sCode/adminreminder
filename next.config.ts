@@ -40,11 +40,14 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
-  // Branded entry point: a link to /adminredminer (e.g. from the portfolio, via
+  // Branded entry point: a link to /adminreminder (e.g. from the portfolio, via
   // a reverse proxy that keeps the path) lands on the app root, which then routes
   // to /login or /dashboard depending on the session.
   async redirects() {
     return [
+      { source: "/adminreminder", destination: "/", permanent: false },
+      { source: "/adminreminder/:path*", destination: "/", permanent: false },
+      // Former name, kept so links published before the rename keep working.
       { source: "/adminredminer", destination: "/", permanent: false },
       { source: "/adminredminer/:path*", destination: "/", permanent: false },
     ];
