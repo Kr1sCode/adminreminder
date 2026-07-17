@@ -33,7 +33,7 @@ export default async function LoginPage() {
         <LoginForm isFirstRun={isFirstRun} />
 
         <p className="text-center text-xs text-muted-foreground mt-8">
-          Admin Redminer – monitor ważności od admina dla admina. Pomysł i wykonanie: www.krzysztofgawkowski.pl
+          AdminReminder – monitor ważności od admina dla admina. Pomysł i wykonanie: www.krzysztofgawkowski.pl
         </p>
       </div>
     </div>

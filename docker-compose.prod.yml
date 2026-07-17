@@ -6,12 +6,12 @@
 # Build on the target host. better-sqlite3 and argon2 are native modules
 # compiled against musl and the host architecture; an image built elsewhere may
 # fail to load them at runtime.
-name: adminredminer
+name: adminreminder
 
 services:
   app:
     build: .
-    image: adminredminer:latest
+    image: adminreminder:latest
 
     # Bound to loopback: the container speaks plain HTTP and next.config.ts emits
     # HSTS, which only makes sense behind a reverse proxy terminating TLS.

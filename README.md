@@ -1,15 +1,15 @@
-# Admin Redminer
+# AdminReminder
 
 **Expiry-date monitor — by an admin, for admins.**
 Concept & build: [www.krzysztofgawkowski.pl](https://www.krzysztofgawkowski.pl)
 
 **English** · [Polski](README.pl.md)
 
-> **Live demo:** **https://adminredminer.krzysztofgawkowski.pl** — log in with
+> **Live demo:** **https://adminreminder.krzysztofgawkowski.pl** — log in with
 > `demo` / `demo123`. The demo is read-only (it shows sample data across every
 > item type and settings tab).
 
-Admin Redminer (AR) helps administrators keep track of expiry and renewal dates
+AdminReminder (AR) helps administrators keep track of expiry and renewal dates
 in one fast, good-looking place — instead of a list in SharePoint or Excel:
 
 - **HTTPS certificates** — expiry date fetched automatically
@@ -50,7 +50,7 @@ container, installs Node.js and the app natively, sets up an **empty database**
 and a systemd service (no Docker, no nesting):
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kr1sCode/adminredminer/main/proxmox/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kr1sCode/adminreminder/main/proxmox/install.sh)"
 ```
 
 When it finishes, the installer prints the address `http://<container-IP>:3000`.
@@ -76,8 +76,8 @@ The SQLite database is kept on a volume (`/app/data/ar.db`).
 ## Local development
 
 ```bash
-git clone https://github.com/Kr1sCode/adminredminer
-cd adminredminer
+git clone https://github.com/Kr1sCode/adminreminder
+cd adminreminder
 npm install
 cp .env.example .env.local
 npm run dev
