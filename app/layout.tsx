@@ -22,8 +22,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AR - Admin Redminer",
-  description: "Admin Redminer – monitor ważności od admina dla admina. Pomysł i wykonanie: www.krzysztofgawkowski.pl",
+  title: "AR - AdminReminder",
+  description: "AdminReminder – monitor ważności od admina dla admina. Pomysł i wykonanie: www.krzysztofgawkowski.pl",
   icons: {
     icon: "/favicon.ico",
   },

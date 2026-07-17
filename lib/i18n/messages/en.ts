@@ -326,7 +326,7 @@ export const en: Messages = {
   "login.firstRunHint": "This account will have full privileges (admin).",
   "login.minChars": "At least 6 characters",
   "login.error.connection": "Cannot reach the server",
-  "app.tagline": "Admin Redminer — an expiry monitor from an admin for admins. Idea and build: www.krzysztofgawkowski.pl",
+  "app.tagline": "AdminReminder — an expiry monitor from an admin for admins. Idea and build: www.krzysztofgawkowski.pl",
 
   "notif.title": "Notifications",
   "notif.mutedUntil": "Notifications muted until {date}",

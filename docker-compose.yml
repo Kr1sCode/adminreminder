@@ -1,11 +1,11 @@
 # Without this, Compose derives the project name from the directory ("ar") and
 # prefixes every container, network and volume with it.
-name: adminredminer
+name: adminreminder
 
 services:
   app:
     build: .
-    image: adminredminer:latest
+    image: adminreminder:latest
     ports:
       - "3000:3000"
     volumes:

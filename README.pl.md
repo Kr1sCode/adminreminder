@@ -1,15 +1,15 @@
-# Admin Redminer
+# AdminReminder
 
 **Monitor terminów ważności — od admina dla admina.**
 Pomysł i wykonanie: [www.krzysztofgawkowski.pl](https://www.krzysztofgawkowski.pl)
 
 [English](README.md) · **Polski**
 
-> **Demo na żywo:** **https://adminredminer.krzysztofgawkowski.pl** — zaloguj się
+> **Demo na żywo:** **https://adminreminder.krzysztofgawkowski.pl** — zaloguj się
 > `demo` / `demo123`. Demo działa w trybie tylko do odczytu (pokazuje przykładowe
 > dane dla każdego typu pozycji i zakładek ustawień).
 
-Admin Redminer (AR) pomaga administratorom śledzić terminy ważności i odnowień w
+AdminReminder (AR) pomaga administratorom śledzić terminy ważności i odnowień w
 jednym, szybkim i ładnym miejscu — zamiast listy w SharePoint czy Excelu:
 
 - **Certyfikaty HTTPS** — automatyczne pobieranie daty ważności
@@ -50,7 +50,7 @@ Debian 13, instaluje natywnie Node.js i aplikację, zakłada **pustą bazę** or
 usługę systemd (bez Dockera, bez nestingu):
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kr1sCode/adminredminer/main/proxmox/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/Kr1sCode/adminreminder/main/proxmox/install.sh)"
 ```
 
 Po zakończeniu instalator wypisze adres `http://<IP-kontenera>:3000`. Przy
@@ -76,8 +76,8 @@ Baza SQLite trzymana jest na wolumenie (`/app/data/ar.db`).
 ## Uruchomienie lokalne (dev)
 
 ```bash
-git clone https://github.com/Kr1sCode/adminredminer
-cd adminredminer
+git clone https://github.com/Kr1sCode/adminreminder
+cd adminreminder
 npm install
 cp .env.example .env.local
 npm run dev

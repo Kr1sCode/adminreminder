@@ -47,7 +47,7 @@ export async function sendWebhook(items: WebhookItem[]): Promise<WebhookResult> 
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "User-Agent": "AR-Admin-Redminer/1.0",
+    "User-Agent": "AdminReminder/1.0",
   };
   if (secret) headers["X-AR-Signature"] = signPayload(secret, body);
 

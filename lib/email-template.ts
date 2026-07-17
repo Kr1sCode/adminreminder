@@ -6,7 +6,7 @@ const M = {
   pl: {
     titleBatch: "Powiadomienie o wygasających pozycjach",
     titleSingle: "Powiadomienie o wygasającej pozycji",
-    needsAttention: (n: number) => `Admin Redminer — ${n === 1 ? "1 pozycja wymaga" : `${n} pozycji wymaga`} uwagi`,
+    needsAttention: (n: number) => `AdminReminder — ${n === 1 ? "1 pozycja wymaga" : `${n} pozycji wymaga`} uwagi`,
     expired: "Po terminie",
     urgent: "Pilne",
     soon: "Zbliża się termin",
@@ -27,7 +27,7 @@ const M = {
   en: {
     titleBatch: "Items approaching expiry",
     titleSingle: "An item is approaching expiry",
-    needsAttention: (n: number) => `Admin Redminer — ${n === 1 ? "1 item needs" : `${n} items need`} attention`,
+    needsAttention: (n: number) => `AdminReminder — ${n === 1 ? "1 item needs" : `${n} items need`} attention`,
     expired: "Overdue",
     urgent: "Urgent",
     soon: "Coming up",
@@ -203,7 +203,7 @@ export function renderNotificationEmail(
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border-collapse:collapse;">
       <tr>
         <td style="width:36px;height:36px;background:#059669;border-radius:50%;text-align:center;vertical-align:middle;line-height:36px;font-size:14px;font-weight:700;color:#ffffff;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;">AR</td>
-        <td style="padding-left:10px;font-size:17px;font-weight:700;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;vertical-align:middle;">Admin Redminer</td>
+        <td style="padding-left:10px;font-size:17px;font-weight:700;color:#111827;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;vertical-align:middle;">AdminReminder</td>
       </tr>
     </table>`;
 

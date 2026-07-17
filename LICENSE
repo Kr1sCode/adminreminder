@@ -1,4 +1,4 @@
-Admin Redminer — Licencja (Proprietary — Homelab-Free / Commercial-Paid)
+AdminReminder — Licencja (Proprietary — Homelab-Free / Commercial-Paid)
 Copyright © 2026 Krzysztof Gawkowski (www.krzysztofgawkowski.pl).
 Wszelkie prawa zastrzeżone. All rights reserved.
 
@@ -7,7 +7,7 @@ WERSJA POLSKA
 ============================================================
 
 1. Definicje
-   „Oprogramowanie” oznacza aplikację Admin Redminer (AR) wraz z kodem
+   „Oprogramowanie” oznacza aplikację AdminReminder (AR) wraz z kodem
    źródłowym, dokumentacją, zasobami i plikami konfiguracyjnymi zawartymi w
    tym repozytorium. „Autor” oznacza Krzysztofa Gawkowskiego. „Licencja
    komercyjna” oznacza odpłatną, pisemną zgodę (umowę) udzieloną przez Autora.
@@ -65,7 +65,7 @@ WERSJA POLSKA
 ENGLISH VERSION
 ============================================================
 
-This software (Admin Redminer) is proprietary and source-available. It is NOT
+This software (AdminReminder) is proprietary and source-available. It is NOT
 open source and is NOT licensed under the MIT License or any other open-source
 license.
 

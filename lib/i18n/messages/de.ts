@@ -326,7 +326,7 @@ export const de: Messages = {
   "login.firstRunHint": "Dieses Konto erhält volle Rechte (Administrator).",
   "login.minChars": "Mindestens 6 Zeichen",
   "login.error.connection": "Server nicht erreichbar",
-  "app.tagline": "Admin Redminer — Ablaufüberwachung von Admins für Admins. Idee und Umsetzung: www.krzysztofgawkowski.pl",
+  "app.tagline": "AdminReminder — Ablaufüberwachung von Admins für Admins. Idee und Umsetzung: www.krzysztofgawkowski.pl",
 
   "notif.title": "Benachrichtigungen",
   "notif.mutedUntil": "Benachrichtigungen stumm bis {date}",

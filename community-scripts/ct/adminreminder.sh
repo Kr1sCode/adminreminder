@@ -2,9 +2,9 @@
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Author: Krzysztof Gawkowski (www.krzysztofgawkowski.pl)
 # License: MIT (skrypt instalacyjny) | Aplikacja: proprietary — patrz LICENSE w repo
-# Source: https://github.com/Kr1sCode/adminredminer
+# Source: https://github.com/Kr1sCode/adminreminder
 
-APP="Admin Redminer"
+APP="AdminReminder"
 var_tags="${var_tags:-monitoring;certificates}"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
@@ -22,16 +22,16 @@ function update_script() {
   header_info
   check_container_storage
   check_container_resources
-  if [[ ! -d /opt/adminredminer ]]; then
+  if [[ ! -d /opt/adminreminder ]]; then
     msg_error "No ${APP} Installation Found!"
     exit
   fi
   msg_info "Updating ${APP}"
-  cd /opt/adminredminer
+  cd /opt/adminreminder
   git pull --ff-only >/dev/null 2>&1 || true
   $STD npm ci --no-audit --no-fund
   $STD npm run build
-  systemctl restart adminredminer
+  systemctl restart adminreminder
   msg_ok "Updated ${APP}"
   exit
 }

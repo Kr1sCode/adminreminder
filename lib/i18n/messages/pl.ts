@@ -328,7 +328,7 @@ export const pl = {
   "login.firstRunHint": "To konto będzie miało pełne uprawnienia (admin).",
   "login.minChars": "Minimum 6 znaków",
   "login.error.connection": "Błąd połączenia z serwerem",
-  "app.tagline": "Admin Redminer — monitor ważności od admina dla admina. Pomysł i wykonanie: www.krzysztofgawkowski.pl",
+  "app.tagline": "AdminReminder — monitor ważności od admina dla admina. Pomysł i wykonanie: www.krzysztofgawkowski.pl",
 
   "notif.title": "Powiadomienia",
   "notif.mutedUntil": "Powiadomienia wyciszone do {date}",

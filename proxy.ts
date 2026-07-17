@@ -11,7 +11,7 @@ import { cookieSecure } from "./lib/cookie-security";
  */
 
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "ar-admin-redminer-dev-secret-change-in-production-please"
+  process.env.JWT_SECRET || "ar-adminreminder-dev-secret-change-in-production-please"
 );
 
 const SESSION_COOKIE = "ar_session";
