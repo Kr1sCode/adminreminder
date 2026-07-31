@@ -1,5 +1,9 @@
 # AdminReminder
 
+[![GitHub stars](https://img.shields.io/github/stars/Kr1sCode/adminreminder?style=flat)](https://github.com/Kr1sCode/adminreminder/stargazers)
+[![License](https://img.shields.io/badge/license-see--LICENSE-blue)](LICENSE)
+[![Last commit](https://img.shields.io/github/last-commit/Kr1sCode/adminreminder)](https://github.com/Kr1sCode/adminreminder/commits/main)
+
 **Expiry-date monitor — by an admin, for admins.**
 Concept & build: [www.krzysztofgawkowski.pl](https://www.krzysztofgawkowski.pl)
 
