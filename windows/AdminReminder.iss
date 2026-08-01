@@ -3,11 +3,14 @@
 ; po npm run build + node windows/build.mjs (ktory sklada dist\win\app) oraz
 ; pobraniu node.exe i nssm.exe do tego samego katalogu.
 ;
-; Architektura: NSSM opakowuje "powershell.exe -File Start-AdminReminder.ps1"
-; jako uslugie Windows "AdminReminder"; ten skrypt przy kazdym starcie uslugi
-; wczytuje %ProgramData%\AdminReminder\.env do zmiennych srodowiskowych i
-; odpala node.exe server.js (standalone build Next.js) - dokladnie ten sam
-; wzorzec co docker-entrypoint.sh + docker-compose environment: w wersji LXC.
+; Architektura: NSSM opakowuje "node.exe service-entry.js" jako usluge
+; Windows "AdminReminder" - NIE przez PowerShell (usluga ktora w drzewie
+; procesow odpala powershell.exe to dokladnie wzorzec ktory ML Defendera
+; oznacza jako trojan/persistence; service-entry.js robi to samo co dawniej
+; robil PS1, w czystym Node). Przy kazdym starcie wczytuje
+; %ProgramData%\AdminReminder\.env do zmiennych srodowiskowych i odpala
+; server.js (standalone build Next.js) - ten sam wzorzec co
+; docker-entrypoint.sh + docker-compose environment: w wersji LXC.
 ;
 ; Kompilacja lokalna (na Windows, z zainstalowanym Inno Setup 6):
 ;   iscc windows\AdminReminder.iss /DMyAppVersion=0.2.0
@@ -128,7 +131,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
-  AppDirPath, DataDirPath, Port, Origin, PsParams: String;
+  AppDirPath, DataDirPath, Port, Origin: String;
 begin
   if CurStep = ssPostInstall then
   begin
@@ -151,9 +154,9 @@ begin
     NssmExec('stop AdminReminder');
     NssmExec('remove AdminReminder confirm');
 
-    NssmExec('install AdminReminder powershell.exe');
-    PsParams := '-NoProfile -ExecutionPolicy Bypass -File ""' + AppDirPath + '\Start-AdminReminder.ps1""';
-    NssmExec('set AdminReminder AppParameters "' + PsParams + '"');
+    // node.exe directly, not through powershell.exe - see the file header.
+    NssmExec('install AdminReminder "' + AppDirPath + '\node.exe"');
+    NssmExec('set AdminReminder AppParameters "service-entry.js"');
     NssmExec('set AdminReminder AppDirectory "' + AppDirPath + '"');
     NssmExec('set AdminReminder DisplayName "AdminReminder"');
     NssmExec('set AdminReminder Description "Monitoring waznosci certyfikatow, kont AD, licencji i innych terminow"');

@@ -56,11 +56,11 @@ for (const native of ["argon2", "better-sqlite3-multiple-ciphers"]) {
   );
 }
 
-// The service wrapper and the .env generator ship next to server.js so
+// The service entry point and the .env generator ship next to server.js so
 // AdminReminder.iss can point NSSM straight at them with no extra pathing.
 copy(
-  path.join(repoRoot, "windows", "Start-AdminReminder.ps1"),
-  path.join(outDir, "Start-AdminReminder.ps1")
+  path.join(repoRoot, "windows", "service-entry.js"),
+  path.join(outDir, "service-entry.js")
 );
 copy(path.join(repoRoot, "windows", "generate-env.js"), path.join(outDir, "generate-env.js"));
 

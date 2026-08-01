@@ -34,7 +34,7 @@ const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 
 const contents = `# Wygenerowane przez instalator AdminReminder ${new Date().toISOString()}
 # Edytuj ten plik, potem zrestartuj usluge Windows "AdminReminder", zeby
-# zmiany zaczely dzialac (Start-AdminReminder.ps1 czyta go przy kazdym starcie).
+# zmiany zaczely dzialac (service-entry.js czyta go przy kazdym starcie).
 
 DATABASE_URL=${dbPath}
 PORT=${port}
