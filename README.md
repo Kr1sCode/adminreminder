@@ -136,14 +136,16 @@ The SQLite database is kept on a volume (`/app/data/ar.db`).
 
 ### Windows
 
+[![Download for Windows](https://img.shields.io/github/v/release/Kr1sCode/adminreminder?label=Download%20for%20Windows&style=for-the-badge&logo=windows)](https://github.com/Kr1sCode/adminreminder/releases/latest)
+
 A native installer (`.exe`) is available for admins who run everything
 directly on Windows Server rather than Proxmox or Docker: it installs
 AdminReminder as a Windows service (via NSSM), asks for a port and a public
 address during setup, adds the matching firewall rule, and generates a fresh
 `.env` with random secrets and — for a brand new install — database encryption
-turned on from the very first run. See the latest [Release](../../releases)
-for the download, or build it yourself from the [`windows/`](windows/)
-directory (GitHub Actions workflow: `windows-installer.yml`).
+turned on from the very first run. Grab `AdminReminder-Setup-*.exe` from the
+button above (always the latest release), or build it yourself from the
+[`windows/`](windows/) directory (GitHub Actions workflow: `windows-installer.yml`).
 
 ### Local development
 
