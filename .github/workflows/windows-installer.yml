@@ -11,6 +11,15 @@ on:
     tags:
       - "v*"
 
+# The default GITHUB_TOKEN is read-only against Releases unless a repo's
+# "Workflow permissions" setting is switched to read/write - rather than
+# depend on that per-repo setting, grant it explicitly here so the "Attach to
+# release" step doesn't fail with "Resource not accessible by integration"
+# (happened on the very first tagged run, v1.2.0 - had to attach the .exe by
+# hand).
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest

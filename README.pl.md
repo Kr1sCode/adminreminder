@@ -133,14 +133,17 @@ Baza SQLite trzymana jest na wolumenie (`/app/data/ar.db`).
 
 ### Windows
 
+[![Pobierz dla Windows](https://img.shields.io/github/v/release/Kr1sCode/adminreminder?label=Pobierz%20dla%20Windows&style=for-the-badge&logo=windows)](https://github.com/Kr1sCode/adminreminder/releases/latest)
+
 Dla administratorów, którzy stawiają narzędzia wprost na Windows Server, bez
 Proxmoksa czy Dockera, dostępny jest natywny instalator (`.exe`): zakłada
 AdminReminder jako usługę Windows (przez NSSM), podczas instalacji pyta o
 port i publiczny adres, dodaje odpowiednią regułę zapory i generuje świeży
 `.env` z losowymi sekretami — a przy zupełnie nowej instalacji od razu
 włącza szyfrowanie bazy danych, bo nie ma jeszcze żadnych danych do migracji.
-Pobierz z najnowszego [wydania](../../releases) albo zbuduj sam z katalogu
-[`windows/`](windows/) (workflow GitHub Actions: `windows-installer.yml`).
+Plik `AdminReminder-Setup-*.exe` pobierzesz przyciskiem wyżej (zawsze
+najnowsze wydanie) albo zbudujesz sam z katalogu [`windows/`](windows/)
+(workflow GitHub Actions: `windows-installer.yml`).
 
 ### Uruchomienie lokalne (dev)
 
