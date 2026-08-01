@@ -19,6 +19,9 @@ services:
       # The built-in scheduler evaluates the cron in this timezone, so "08:00
       # daily" means local, not UTC. Override in .env if the operator differs.
       - TZ=${TZ:-Europe/Warsaw}
+      # Optional: encrypts ar.db with SQLCipher. Unset = plaintext, unchanged.
+      # See docker-compose.prod.yml for the full explanation.
+      - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY:-}
       # The ":?" form makes `docker compose up` FAIL if the variable is unset,
       # so a deployment can never accidentally run with a placeholder secret.
       # Put the real values in a .env file next to this compose file:

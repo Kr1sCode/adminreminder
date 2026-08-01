@@ -10,7 +10,7 @@ import { getDomainExpiry } from "./domain";
  *
  * Server-side only: pulls in tls and RDAP.
  */
-export const AUTO_CHECKABLE_TYPES = ["https_cert", "tls_endpoint", "domain"] as const;
+export const AUTO_CHECKABLE_TYPES = ["https_cert", "tls_endpoint", "adcs", "domain"] as const;
 
 export function isAutoCheckable(type: string): boolean {
   return (AUTO_CHECKABLE_TYPES as readonly string[]).includes(type);

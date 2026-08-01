@@ -38,4 +38,12 @@ export async function register() {
   // (e.g. on a read-only demo instance).
   const { startScheduler } = await import("./lib/scheduler");
   startScheduler();
+
+  // Courtesy check for a newer signed release (lib/update-check.ts), cached
+  // in settings so this only actually reaches GitHub once a day no matter
+  // how often the process restarts. Fire and forget: never delays startup,
+  // never throws.
+  import("./lib/update-check")
+    .then(({ checkForUpdate }) => checkForUpdate())
+    .catch(() => {});
 }

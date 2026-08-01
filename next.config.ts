@@ -37,6 +37,13 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Next auto-excludes well-known native packages like "better-sqlite3" from
+  // bundling so their `bindings`-based lookup keeps working against a real
+  // node_modules layout at runtime; it has no idea this fork exists, so
+  // Turbopack would otherwise inline it into a JS chunk and break that lookup
+  // (surfaces as "Could not locate the bindings file" during page-data
+  // collection, since drizzle-orm/better-sqlite3 loads a driver eagerly).
+  serverExternalPackages: ["better-sqlite3-multiple-ciphers"],
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

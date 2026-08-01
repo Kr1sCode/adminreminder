@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { services, ITEM_TYPES, ITEM_TYPE_LABELS } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 import { computeStatus } from "@/lib/cert-checker";
 import { createService, isDuplicateError, sanitizeCustomData } from "@/lib/server/create-service";
 import { getThresholds } from "@/lib/settings";
+import { getItemLimit } from "@/lib/license";
 import { recordAudit } from "@/lib/audit";
 
 /**
@@ -82,6 +83,22 @@ export async function POST(request: NextRequest) {
     // Asking for domain tracking makes the row a website, i.e. an https_cert row
     // carrying both dates — so the duplicate check has to look for that type.
     const effectiveType = alsoTrack ? "https_cert" : type;
+
+    // The free tier is a hard cap on how many items exist, not a feature flag —
+    // checked here, before the row is created, rather than filtered out of a
+    // list after the fact.
+    const limit = await getItemLimit();
+    const [{ value: currentCount }] = await db.select({ value: count() }).from(services);
+    if (currentCount >= limit) {
+      return NextResponse.json(
+        {
+          error:
+            `Osiagnieto limit ${limit} pozycji w wersji darmowej. ` +
+            "Wprowadz klucz licencyjny w Ustawienia -> Licencja, zeby dodawac wiecej.",
+        },
+        { status: 402 }
+      );
+    }
 
     // Answers the common case — the same item submitted twice — with a message
     // the operator can act on. The unique index behind it is what actually

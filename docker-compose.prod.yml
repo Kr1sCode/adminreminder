@@ -39,6 +39,15 @@ services:
       - DATABASE_URL=/app/data/ar.db
       - TZ=${TZ:-Europe/Warsaw}
 
+      # Optional: transparently encrypts ar.db with SQLCipher (lib/db-encryption.js).
+      # Unset = today's plaintext behaviour, unchanged. Set it on an existing
+      # install and the next start converts the file in place, once — nothing
+      # to export/import by hand. Generate with: openssl rand -base64 32
+      # Back this up somewhere outside this .env: lose it and the data in
+      # ar.db is unrecoverable, same as losing JWT_SECRET's sessions but
+      # permanent instead of "everyone logs in again".
+      - DB_ENCRYPTION_KEY=${DB_ENCRYPTION_KEY:-}
+
       # The ":?" form fails `up` rather than starting with a placeholder secret.
       #   JWT_SECRET=$(openssl rand -base64 48)
       #   SETTINGS_KEY=$(openssl rand -base64 32)

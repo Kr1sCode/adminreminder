@@ -7,6 +7,7 @@ import { syncAzureCredentials } from "./azure/sync";
 import { syncEntraUsers } from "./azure/users-sync";
 import { isAdConfigured } from "./ad/resolve";
 import { syncAdAccounts } from "./ad/sync";
+import { syncAdcsCertificates } from "./ad/adcs";
 
 /** Runs an optional sync, capturing rather than throwing so one failure does
  *  not abort the others or the certificate checks. */
@@ -32,6 +33,9 @@ export async function runChecks() {
   const azureSync = await runOptional(azureConfigured, "Azure credentials", syncAzureCredentials);
   const entraSync = await runOptional(azureConfigured, "Entra users", syncEntraUsers);
   const adSync = await runOptional(adConfigured, "Active Directory", syncAdAccounts);
+  // Discovers Root/Issuing CA certificates straight from AD's Configuration NC.
+  // Silently a no-op where no AD CS was ever installed (see lib/ad/adcs.ts).
+  const adcsSync = await runOptional(adConfigured, "AD CS", syncAdcsCertificates);
 
   const azure = azureSync.result;
   const azureError = azureSync.error;
@@ -65,5 +69,7 @@ export async function runChecks() {
     entraError: entraSync.error,
     ad: adSync.result,
     adError: adSync.error,
+    adcs: adcsSync.result,
+    adcsError: adcsSync.error,
   };
 }

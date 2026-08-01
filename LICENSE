@@ -27,6 +27,14 @@ WERSJA POLSKA
    nauki i oceny technicznej. Użytek prywatny nie może przynosić przychodu ani
    służyć działalności zawodowej, biznesowej lub organizacyjnej.
 
+3a. Techniczny limit wersji darmowej
+   Oprogramowanie bez ważnego klucza licencyjnego śledzi maksymalnie 5 (pięć)
+   pozycji jednocześnie, niezależnie od tego, czy korzystasz z niego w ramach
+   użytku prywatnego (pkt 3) czy komercyjnego (pkt 4). Limit jest egzekwowany
+   technicznie przez samo Oprogramowanie. Klucz licencyjny znoszący ten limit
+   wydaje Autor — w sprawie jego uzyskania, także dla użytku prywatnego
+   przekraczającego ten limit, należy kontaktować się z Autorem (pkt 7).
+
 4. Użytek komercyjny — WYMAGA PŁATNEJ LICENCJI I ZGODY AUTORA
    Jakiekolwiek wykorzystanie Oprogramowania w celach komercyjnych,
    biznesowych, zawodowych, produkcyjnych lub w ramach jakiejkolwiek
@@ -74,6 +82,13 @@ non-transferable right to download, install, run and modify the Software for
 their OWN PRIVATE, NON-COMMERCIAL purposes, including a home lab (homelab), and
 for learning and technical evaluation. Private use may not generate revenue or
 serve any professional, business or organizational activity.
+
+Free-tier item limit: without a valid license key, the Software tracks up to
+5 (five) items at a time, regardless of whether it is used privately (see
+above) or commercially (see below). This limit is enforced technically by
+the Software itself. A license key that removes this limit is issued by the
+author — including for private use that exceeds this limit — contact the
+author (see below) to request one.
 
 PAID — Commercial use: any commercial, business, professional or production
 use, or any use within an organization (company, institution, public body,

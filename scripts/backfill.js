@@ -1,5 +1,5 @@
-const Database = require("better-sqlite3");
-const db = new Database("./ar.db");
+const { openDatabase } = require("../lib/db-encryption");
+const db = openDatabase(process.env.DATABASE_URL || "./ar.db");
 
 console.log("Backfilling identifier and type from legacy data...");
 

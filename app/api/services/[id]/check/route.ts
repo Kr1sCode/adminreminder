@@ -26,7 +26,7 @@ export async function POST(
   if (!isAutoCheckable(item.type) && !item.domainName) {
     return NextResponse.json({
       success: false,
-      error: "Automatyczne sprawdzanie dostępne tylko dla certyfikatów HTTPS i domen",
+      error: "Ten typ pozycji nie ma automatycznego sprawdzania — data ważności jest wpisywana ręcznie",
     }, { status: 400 });
   }
 

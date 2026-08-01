@@ -27,6 +27,7 @@ export const settings = sqliteTable("settings", {
 export const ITEM_TYPES = [
   'https_cert',
   'tls_endpoint',
+  'adcs',
   'warranty',
   'azure_secret',
   'azure_cert',
@@ -56,6 +57,13 @@ export const services = sqliteTable("services", {
   //   role — free-text label of what the endpoint is (LDAPS / ADFS / VPN / Exchange…)
   //   sni  — TLS server name to request; empty means "use the identifier"
   //   pin  — expected SHA-256 fingerprint; a mismatch means the cert was swapped
+  // For adcs this carries what the last probe learned (informational, rewritten
+  // on every check — identifier is the AD object's DN, the only field that matters):
+  //   role      — "Root CA" or "CA pośredni (Issuing)", derived from subject==issuer
+  //   container — which AD container it came from: certification-authorities | aia
+  //   managed   — "sync" when auto-discovered; absent/other means hand-added, so
+  //               syncAdcsCertificates() never deletes it when the CA disappears
+  //               from the directory (it might live in another forest).
   customData: text("custom_data", { mode: "json" }).$type<Record<string, string>>().default({}),
   // Renewal
   renewalUrl: text("renewal_url"),
@@ -297,6 +305,7 @@ export type CheckHistory = typeof checkHistory.$inferSelect;
 export const ITEM_TYPE_LABELS: Record<ItemType, string> = {
   https_cert: 'Certyfikat HTTPS',
   tls_endpoint: 'Punkt TLS (LDAPS / usługa)',
+  adcs: 'Certyfikat CA (AD CS)',
   warranty: 'Gwarancja sprzętu',
   azure_secret: 'Sekret Azure (Graph API)',
   azure_cert: 'Certyfikat Azure',

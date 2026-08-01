@@ -165,3 +165,14 @@ export function firstBuffer(value: EntryValue | undefined): Buffer | undefined {
   const raw = Array.isArray(value) ? value[0] : value;
   return Buffer.isBuffer(raw) ? raw : undefined;
 }
+
+/**
+ * All binary values of a multi-valued attribute. cACertificate is normally
+ * single-valued, but holds two entries during an active CA key-rollover
+ * window (old key + new key) — both need to be seen, not just the first.
+ */
+export function asBufferArray(value: EntryValue | undefined): Buffer[] {
+  if (value === undefined || value === null) return [];
+  const list = Array.isArray(value) ? value : [value];
+  return list.filter((v): v is Buffer => Buffer.isBuffer(v));
+}

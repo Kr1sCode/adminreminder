@@ -1,4 +1,6 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
+# Node 20 is EOL: better-sqlite3-multiple-ciphers stopped publishing prebuilds
+# for it, which would force a node-gyp compile from source on every build.
 
 # Install dependencies only when needed
 FROM base AS deps
@@ -45,11 +47,15 @@ RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Schema bootstrap needs the migration scripts and the native better-sqlite3
-# module, which is not traced into the standalone bundle because nothing in the
-# server graph imports it at build time.
+# Schema bootstrap needs the migration scripts, lib/db-encryption.js (the
+# same file server.js uses internally, but that copy is bundled into a chunk —
+# init-db.js runs outside the bundle and needs a real file on disk) and the
+# native better-sqlite3-multiple-ciphers module, none of which are traced into
+# the standalone bundle because nothing in the server graph requires them at
+# build time the way a plain top-level import would be.
 COPY --from=builder --chown=nextjs:nodejs /app/scripts ./scripts
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=builder --chown=nextjs:nodejs /app/lib/db-encryption.js ./lib/db-encryption.js
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/better-sqlite3-multiple-ciphers ./node_modules/better-sqlite3-multiple-ciphers
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 

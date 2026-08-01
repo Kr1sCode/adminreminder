@@ -12,11 +12,10 @@
  *   DATABASE_URL=/app/data/ar.db node scripts/seed-demo.js
  */
 const path = require("path");
-const Database = require("better-sqlite3");
+const { openDatabase } = require("../lib/db-encryption");
 
 const DB = process.env.DATABASE_URL || path.join(process.cwd(), "ar.db");
-const db = new Database(DB);
-db.pragma("journal_mode = WAL");
+const db = openDatabase(DB);
 
 const NOW = Math.floor(Date.now() / 1000);
 const DAY = 86400;
