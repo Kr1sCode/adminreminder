@@ -185,15 +185,17 @@ export function DashboardClient({
   // Signed release check (lib/update-check.ts) — cached server-side, this
   // call is cheap. Dismissal is per-version and purely client-side: a later
   // release re-shows the banner even if an older one was dismissed.
-  const [updateInfo, setUpdateInfo] = useState<{ latestVersion: string; notesUrl: string } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{ latestVersion: string; notesUrl: string; canAutoInstall: boolean } | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
   useEffect(() => {
     if (currentUser.role !== "admin") return;
     fetch("/api/update-check")
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data?.available) return;
-        setUpdateInfo({ latestVersion: data.latestVersion, notesUrl: data.notesUrl });
+        setUpdateInfo({ latestVersion: data.latestVersion, notesUrl: data.notesUrl, canAutoInstall: !!data.canAutoInstall });
         setUpdateDismissed(localStorage.getItem("ar_update_dismissed") === data.latestVersion);
       })
       .catch(() => {});
@@ -203,6 +205,28 @@ export function DashboardClient({
   function dismissUpdate() {
     if (updateInfo) localStorage.setItem("ar_update_dismissed", updateInfo.latestVersion);
     setUpdateDismissed(true);
+  }
+
+  async function installUpdate() {
+    if (!updateInfo) return;
+    if (!confirm(t("dash.updateInstallConfirm", { version: updateInfo.latestVersion }))) return;
+    setInstalling(true);
+    setInstallError(null);
+    try {
+      const res = await fetch("/api/update-check/install", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setInstallError(data.error || t("dash.updateInstallError"));
+        setInstalling(false);
+        return;
+      }
+      // No further UI update expected: the service restarts under this
+      // request within moments, taking the current page down with it.
+    } catch {
+      // A network error here is the EXPECTED outcome of a successful call —
+      // the installer stops the service (and this connection) mid-flight.
+      // installing stays true; the page will simply stop responding.
+    }
   }
   const [savingItem, setSavingItem] = useState(false);
   const [renewingId, setRenewingId] = useState<number | null>(null);
@@ -650,26 +674,45 @@ export function DashboardClient({
     // Fills the height handed down by the page shell; only the table scrolls.
     <div className="flex h-full min-h-0 flex-col">
       {updateInfo && !updateDismissed && (
-        <div className="flex items-center gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-4 py-2 mb-3 text-sm shrink-0">
-          <Sparkles className="h-4 w-4 text-emerald-500 shrink-0" />
-          <span className="flex-1">
-            {t("dash.updateAvailable", { version: updateInfo.latestVersion })}
-          </span>
-          <a
-            href={updateInfo.notesUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-emerald-600 dark:text-emerald-400 font-medium hover:underline shrink-0"
-          >
-            {t("dash.updateViewRelease")}
-          </a>
-          <button
-            onClick={dismissUpdate}
-            className="text-muted-foreground hover:text-foreground shrink-0"
-            title={t("dash.updateDismiss")}
-          >
-            <X className="h-4 w-4" />
-          </button>
+        <div className="flex flex-col gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-4 py-2 mb-3 text-sm shrink-0">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-4 w-4 text-emerald-500 shrink-0" />
+            <span className="flex-1">
+              {t("dash.updateAvailable", { version: updateInfo.latestVersion })}
+            </span>
+            {updateInfo.canAutoInstall && (
+              <Button
+                size="sm"
+                onClick={installUpdate}
+                disabled={installing}
+                className="bg-emerald-500 hover:bg-emerald-600 text-black shrink-0 h-7"
+              >
+                {installing ? t("dash.updateInstalling") : t("dash.updateInstallNow")}
+              </Button>
+            )}
+            <a
+              href={updateInfo.notesUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-emerald-600 dark:text-emerald-400 font-medium hover:underline shrink-0"
+            >
+              {t("dash.updateViewRelease")}
+            </a>
+            <button
+              onClick={dismissUpdate}
+              disabled={installing}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              title={t("dash.updateDismiss")}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {installing && (
+            <p className="text-xs text-muted-foreground pl-7">{t("dash.updateInstallingHint")}</p>
+          )}
+          {installError && (
+            <p className="text-xs text-red-500 dark:text-red-400 pl-7">{installError}</p>
+          )}
         </div>
       )}
 

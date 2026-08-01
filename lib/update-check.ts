@@ -24,11 +24,28 @@ const UPDATE_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEA38vjMBTcsC7UmvN5X8iNc/VY/eWYL3SvzlL2ZxwrB+w=
 -----END PUBLIC KEY-----`;
 
+interface SignedManifest {
+  version: string;
+  notesUrl: string;
+  /** Both present together or not at all — see update-tools/sign-release.js. */
+  installerUrl?: string;
+  installerSha256?: string;
+}
+
 export interface UpdateInfo {
   available: boolean;
   currentVersion: string;
   latestVersion: string;
   notesUrl: string;
+  /** Only set when the SIGNED manifest carries an installer + hash for it.
+   *  lib/windows-updater.ts refuses to run anything not matching this hash. */
+  installerUrl?: string;
+  installerSha256?: string;
+  /** True only when this OS can actually run the download-and-run flow AND
+   *  the manifest actually offers an installer for it. The dashboard shows
+   *  the "Zainstaluj teraz" button only when this is true; otherwise it
+   *  falls back to a plain link, same as before auto-install existed. */
+  canAutoInstall: boolean;
 }
 
 function parseVersion(v: string): [number, number, number] | null {
@@ -48,7 +65,7 @@ function isNewer(latest: string, current: string): boolean {
 }
 
 /** Downloads and verifies the signed manifest off the latest GitHub release. */
-async function fetchSignedManifest(): Promise<{ version: string; notesUrl: string } | null> {
+async function fetchSignedManifest(): Promise<SignedManifest | null> {
   const releaseRes = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
     headers: { Accept: "application/vnd.github+json" },
     signal: AbortSignal.timeout(8000),
@@ -74,7 +91,25 @@ async function fetchSignedManifest(): Promise<{ version: string; notesUrl: strin
   // Only ever surface an http(s) link to an admin's browser.
   if (!/^https:\/\//i.test(notesUrl)) return null;
 
-  return { version, notesUrl };
+  const result: SignedManifest = { version, notesUrl };
+
+  // installerUrl/installerSha256 are optional, but only meaningful together -
+  // a hash with no URL or a URL with no hash to check it against is useless.
+  const installerUrl = payload.installerUrl;
+  const installerSha256 = payload.installerSha256;
+  if (typeof installerUrl === "string" && typeof installerSha256 === "string") {
+    // Constrains what a (validly signed) manifest could ever point the
+    // downloader at, as defense in depth beyond the signature itself.
+    if (
+      /^https:\/\/github\.com\/Kr1sCode\/adminreminder\/releases\/download\//i.test(installerUrl) &&
+      /^[0-9a-f]{64}$/i.test(installerSha256)
+    ) {
+      result.installerUrl = installerUrl;
+      result.installerSha256 = installerSha256.toLowerCase();
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -86,19 +121,24 @@ async function fetchSignedManifest(): Promise<{ version: string; notesUrl: strin
  */
 export async function checkForUpdate(force = false): Promise<UpdateInfo | null> {
   const currentVersion = pkg.version;
+  const isWindows = process.platform === "win32";
+
+  const toInfo = (m: { latestVersion: string; notesUrl: string; installerUrl?: string; installerSha256?: string }): UpdateInfo => ({
+    currentVersion,
+    latestVersion: m.latestVersion,
+    notesUrl: m.notesUrl,
+    installerUrl: m.installerUrl,
+    installerSha256: m.installerSha256,
+    available: isNewer(m.latestVersion, currentVersion),
+    canAutoInstall: isWindows && !!m.installerUrl && !!m.installerSha256,
+  });
 
   if (!force) {
     const cachedAt = Number((await getSetting("update_check_at")) || 0);
     const cached = await getSetting("update_check_result");
     if (cached && Date.now() - cachedAt < CHECK_INTERVAL_MS) {
       try {
-        const parsed = JSON.parse(cached);
-        return {
-          currentVersion,
-          latestVersion: parsed.latestVersion,
-          notesUrl: parsed.notesUrl,
-          available: isNewer(parsed.latestVersion, currentVersion),
-        };
+        return toInfo(JSON.parse(cached));
       } catch {
         // Corrupt cache: fall through to a fresh check.
       }
@@ -110,17 +150,15 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
     await setSetting("update_check_at", String(Date.now()));
     if (!manifest) return null;
 
-    await setSetting(
-      "update_check_result",
-      JSON.stringify({ latestVersion: manifest.version, notesUrl: manifest.notesUrl })
-    );
-
-    return {
-      available: isNewer(manifest.version, currentVersion),
-      currentVersion,
+    const cacheable = {
       latestVersion: manifest.version,
       notesUrl: manifest.notesUrl,
+      installerUrl: manifest.installerUrl,
+      installerSha256: manifest.installerSha256,
     };
+    await setSetting("update_check_result", JSON.stringify(cacheable));
+
+    return toInfo(cacheable);
   } catch {
     return null;
   }

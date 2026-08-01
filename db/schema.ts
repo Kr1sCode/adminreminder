@@ -267,7 +267,7 @@ export const AUDIT_ACTIONS = [
   'auth.login', 'auth.login_failed', 'auth.logout', 'auth.setup',
   'mfa.enrolled', 'auth.mfa_failed',
   'sync.ad', 'sync.entra', 'sync.azure', 'notifications.send',
-  'ad.notifications',
+  'ad.notifications', 'system.update',
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
