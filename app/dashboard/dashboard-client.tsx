@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -26,7 +26,9 @@ import {
   ChevronsUpDown,
   Bell,
   BellOff,
-  Download
+  Download,
+  Sparkles,
+  X
 } from "lucide-react";
 import { NotificationPanel } from "@/components/notification-panel";
 import { NavStats, StatPill } from "@/components/nav-stats";
@@ -41,6 +43,7 @@ import { format } from "date-fns";
 const ITEM_TYPES = [
   { value: 'https_cert', autoCheck: true },
   { value: 'tls_endpoint', autoCheck: true },
+  { value: 'adcs', autoCheck: true },
   { value: 'warranty', autoCheck: false },
   { value: 'azure_secret', autoCheck: false },
   { value: 'azure_cert', autoCheck: false },
@@ -165,6 +168,42 @@ export function DashboardClient({
 
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<Item | null>(null);
+
+  // Free-tier usage banner. Only admins can add items, so only they need to
+  // know they're about to hit the wall — a viewer fetching this would just
+  // get a 403 (the route is admin-only) for no reason.
+  const [license, setLicense] = useState<{ active: boolean; freeLimit: number } | null>(null);
+  useEffect(() => {
+    if (currentUser.role !== "admin") return;
+    fetch("/api/settings/license")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data && setLicense({ active: data.active, freeLimit: data.freeLimit }))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Signed release check (lib/update-check.ts) — cached server-side, this
+  // call is cheap. Dismissal is per-version and purely client-side: a later
+  // release re-shows the banner even if an older one was dismissed.
+  const [updateInfo, setUpdateInfo] = useState<{ latestVersion: string; notesUrl: string } | null>(null);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
+  useEffect(() => {
+    if (currentUser.role !== "admin") return;
+    fetch("/api/update-check")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data?.available) return;
+        setUpdateInfo({ latestVersion: data.latestVersion, notesUrl: data.notesUrl });
+        setUpdateDismissed(localStorage.getItem("ar_update_dismissed") === data.latestVersion);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function dismissUpdate() {
+    if (updateInfo) localStorage.setItem("ar_update_dismissed", updateInfo.latestVersion);
+    setUpdateDismissed(true);
+  }
   const [savingItem, setSavingItem] = useState(false);
   const [renewingId, setRenewingId] = useState<number | null>(null);
   const [notifyItem, setNotifyItem] = useState<Item | null>(null);
@@ -610,6 +649,30 @@ export function DashboardClient({
   return (
     // Fills the height handed down by the page shell; only the table scrolls.
     <div className="flex h-full min-h-0 flex-col">
+      {updateInfo && !updateDismissed && (
+        <div className="flex items-center gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-4 py-2 mb-3 text-sm shrink-0">
+          <Sparkles className="h-4 w-4 text-emerald-500 shrink-0" />
+          <span className="flex-1">
+            {t("dash.updateAvailable", { version: updateInfo.latestVersion })}
+          </span>
+          <a
+            href={updateInfo.notesUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-emerald-600 dark:text-emerald-400 font-medium hover:underline shrink-0"
+          >
+            {t("dash.updateViewRelease")}
+          </a>
+          <button
+            onClick={dismissUpdate}
+            className="text-muted-foreground hover:text-foreground shrink-0"
+            title={t("dash.updateDismiss")}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {/* Counters ride in the top bar; the table gets the reclaimed height. */}
       <NavStats>
         <StatPill label={t("stats.all")} value={stats.total} title={t("stats.allTitle")} />
@@ -685,6 +748,16 @@ export function DashboardClient({
             <Download className="h-4 w-4 mr-2" />
             {t("dash.export")}
           </Button>
+
+          {currentUser.role === "admin" && license && !license.active && (
+            <a
+              href="/dashboard/settings?tab=licencja"
+              className="flex items-center text-xs text-muted-foreground hover:text-foreground underline decoration-dotted self-center px-1"
+              title={t("dash.freeTierHint")}
+            >
+              {t("dash.freeTierUsage", { count: items.length, limit: license.freeLimit })}
+            </a>
+          )}
 
           {currentUser.role === "admin" && (
             <Button onClick={openAdd} className="bg-emerald-500 hover:bg-emerald-600 text-black font-medium">
@@ -762,7 +835,7 @@ export function DashboardClient({
                       {item.identifier}
                       {(isCert || item.type === 'tls_endpoint') && item.port !== 443 && `:${item.port}`}
                     </div>
-                    {item.type === 'tls_endpoint' && item.customData?.role && (
+                    {(item.type === 'tls_endpoint' || item.type === 'adcs') && item.customData?.role && (
                       <div className="text-[10px] font-sans text-muted-foreground mt-0.5 truncate" title={item.customData.role}>
                         {item.customData.role}
                       </div>
@@ -949,21 +1022,27 @@ export function DashboardClient({
               <div className={showPortField ? "sm:col-span-3" : "sm:col-span-5"}>
                 <Label className="text-sm font-medium text-foreground/90">
                   {form.type === 'https_cert' || form.type === 'tls_endpoint' ? t("dlg.hostLabel") :
-                   form.type === 'domain' ? t("dlg.domainLabel") : t("dlg.identifier")}
+                   form.type === 'domain' ? t("dlg.domainLabel") :
+                   form.type === 'adcs' ? t("dlg.adcsLabel") : t("dlg.identifier")}
                 </Label>
                 <Input
                   required
                   value={form.identifier}
                   onChange={(e) => setForm({ ...form, identifier: e.target.value })}
+                  className={form.type === 'adcs' ? "font-mono text-xs" : undefined}
                   placeholder={
                     form.type === 'https_cert' ? t("dlg.hostPh") :
                     form.type === 'tls_endpoint' ? t("dlg.tlsHostPh") :
                     form.type === 'domain' ? t("dlg.domainPh") :
+                    form.type === 'adcs' ? t("dlg.adcsPh") :
                     form.type === 'azure_secret' ? t("dlg.azurePh") :
                     form.type === 'warranty' ? t("dlg.warrantyPh") :
                     t("dlg.otherPh")
                   }
                 />
+                {form.type === 'adcs' && (
+                  <p className="text-xs text-muted-foreground mt-1">{t("dlg.adcsHint")}</p>
+                )}
               </div>
 
               {showPortField && (

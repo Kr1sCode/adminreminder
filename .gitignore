@@ -20,6 +20,9 @@
 # production
 /build
 
+# windows installer build output (windows/build.mjs, .github/workflows/windows-installer.yml)
+/dist/
+
 # misc
 .DS_Store
 *.pem

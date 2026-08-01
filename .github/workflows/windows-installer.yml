@@ -1,0 +1,85 @@
+name: Windows installer
+
+# Builds AdminReminder-Setup-<version>.exe on a real Windows runner - the
+# native modules (better-sqlite3, argon2) need Windows prebuilds/binaries that
+# nothing on Linux can produce, and Inno Setup itself only runs on Windows.
+# Manual by default (packaging a still-new distribution channel); also runs on
+# version tags so a tagged release always has a matching Windows build.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # better-sqlite3's Windows prebuilds only cover currently-supported
+          # Node ABIs; Node 20 reached EOL and no longer gets one, which sends
+          # npm straight to node-gyp - and node-gyp's Visual Studio finder
+          # crashes on the windows-latest image (ERR_CHILD_PROCESS_STDIO_MAXBUFFER,
+          # unrelated to whether VS is actually installed). Node 22 has a
+          # published prebuild, so npm ci never needs node-gyp at all.
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Next.js (standalone)
+        run: npm run build
+
+      - name: Stage app files
+        run: node windows/build.mjs
+
+      - name: Bundle the runner's own node.exe
+        # Using the exact binary npm ci/build already ran against keeps it in
+        # lockstep with whatever ABI better-sqlite3/argon2 were resolved for -
+        # downloading a separately-versioned node.exe could silently mismatch.
+        shell: pwsh
+        run: |
+          $nodePath = (Get-Command node.exe).Source
+          Copy-Item $nodePath "dist/win/app/node.exe"
+          & "dist/win/app/node.exe" --version
+
+      - name: Download NSSM (Windows service wrapper)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile "nssm.zip"
+          Expand-Archive -Path "nssm.zip" -DestinationPath "nssm-extracted"
+          Copy-Item "nssm-extracted/nssm-2.24/win64/nssm.exe" "dist/win/app/nssm.exe"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Read package version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (node -p "require('./package.json').version")
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          & $iscc "windows\AdminReminder.iss" "/DMyAppVersion=${{ steps.version.outputs.version }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AdminReminder-Setup-windows
+          path: dist/installer/*.exe
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/installer/*.exe

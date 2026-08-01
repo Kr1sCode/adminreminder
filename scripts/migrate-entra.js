@@ -5,9 +5,9 @@
  *
  *   node scripts/migrate-entra.js
  */
-const Database = require("better-sqlite3");
+const { openDatabase } = require("../lib/db-encryption");
 
-const db = new Database(process.env.DATABASE_URL || "./ar.db");
+const db = openDatabase(process.env.DATABASE_URL || "./ar.db");
 
 function columnExists(table, column) {
   return db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);

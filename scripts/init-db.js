@@ -7,12 +7,13 @@
  * because the drizzle migration history drifted from the real database and
  * `drizzle-kit migrate` cannot be used (see docs / migrate-*.js).
  */
-const Database = require("better-sqlite3");
+const { openDatabase } = require("../lib/db-encryption");
 
 const dbPath = process.env.DATABASE_URL || "./ar.db";
-const db = new Database(dbPath);
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+// Transparently encrypted with SQLCipher when DB_ENCRYPTION_KEY is set,
+// including converting a pre-existing plaintext database on the very run
+// where the key is first configured — see lib/db-encryption.js.
+const db = openDatabase(dbPath);
 
 function columnExists(table, column) {
   return db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);

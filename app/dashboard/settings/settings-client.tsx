@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Trash2, Plus, Save, SlidersHorizontal, Mail, Cloud, Network, Users, Clock,
-  AlertTriangle, CheckCircle2, KeyRound, Webhook, Copy, Check,
+  AlertTriangle, CheckCircle2, KeyRound, Webhook, Copy, Check, ShieldCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useEffect } from "react";
@@ -38,6 +38,16 @@ interface Props {
 }
 
 type Feedback = { kind: "ok" | "error"; text: string } | null;
+
+type LicenseStatus = {
+  active: boolean;
+  customer: string | null;
+  maxItems: number | null;
+  expiresAt: string | null;
+  freeLimit: number;
+  currentCount: number;
+  limit: number;
+};
 
 
 const SETTING_KEYS = [
@@ -165,6 +175,10 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
   const [copied, setCopied] = useState(false);
   const [keyToDelete, setKeyToDelete] = useState<ApiKeyRow | null>(null);
 
+  const [license, setLicense] = useState<LicenseStatus | null>(null);
+  const [licenseKeyInput, setLicenseKeyInput] = useState("");
+  const [licenseBusy, setLicenseBusy] = useState(false);
+
   // ── Automatyzacja (wbudowany harmonogram) ──────────────────────────────────
   type AutoState = {
     enabled: boolean; cron: string; valid: boolean; error: string | null; timezone: string;
@@ -189,6 +203,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
     if (tabParam) setTab(tabParam);
     loadApiKeys();
     loadAutomation();
+    loadLicense();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -349,6 +364,36 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
 
   const set = (key: string, value: string) => setSettings((s) => ({ ...s, [key]: value }));
   const get = (key: string, fallback = "") => settings[key] ?? fallback;
+
+  async function loadLicense() {
+    try {
+      const res = await fetch("/api/settings/license");
+      if (res.ok) setLicense(await res.json());
+    } catch { /* ignoruj */ }
+  }
+
+  async function submitLicenseKey(key: string) {
+    setLicenseBusy(true);
+    try {
+      const res = await fetch("/api/settings/license", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setLicense(data);
+        setLicenseKeyInput("");
+        notify("ok", key ? t("set.license.saved") : t("set.license.removed"));
+      } else {
+        notify("error", data.error || t("set.license.saveError"));
+      }
+    } catch (e: any) {
+      notify("error", e.message || t("set.license.saveError"));
+    } finally {
+      setLicenseBusy(false);
+    }
+  }
 
   function notify(kind: "ok" | "error", text: string, ms = 4000) {
     setFeedback({ kind, text });
@@ -527,6 +572,7 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
           <TabsTrigger value="uzytkownicy" icon={<Users className="h-4 w-4" />}>{t("set.tab.users")}</TabsTrigger>
           <TabsTrigger value="api" icon={<KeyRound className="h-4 w-4" />}>{t("set.tab.api")}</TabsTrigger>
           <TabsTrigger value="automatyzacja" icon={<Clock className="h-4 w-4" />}>{t("set.tab.automation")}</TabsTrigger>
+          <TabsTrigger value="licencja" icon={<ShieldCheck className="h-4 w-4" />}>{t("set.tab.license")}</TabsTrigger>
         </TabsList>
 
         {/* ---------------- Ogólne ---------------- */}
@@ -1379,6 +1425,81 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                   </p>
                 </div>
               </details>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ---------------- Licencja ---------------- */}
+        <TabsContent value="licencja">
+          <Card className="border-border bg-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" /> {t("set.license.title")}</CardTitle>
+              <CardDescription>{t("set.license.desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {license && (
+                <div className={`rounded-lg border p-4 ${license.active ? "border-emerald-500/40 bg-emerald-500/5" : "border-amber-500/40 bg-amber-500/5"}`}>
+                  {license.active ? (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2 font-medium text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="h-4 w-4" /> {t("set.license.activeTitle")}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {t("set.license.customer")}: <span className="text-foreground font-medium">{license.customer}</span>
+                      </div>
+                      {license.expiresAt && (
+                        <div className="text-muted-foreground">
+                          {t("set.license.expiresLabel")}: <span className="text-foreground font-medium">{format(new Date(license.expiresAt), "dd.MM.yyyy")}</span>
+                        </div>
+                      )}
+                      <div className="text-muted-foreground">
+                        {t("set.license.usageLabel")}: <span className="text-foreground font-medium">{license.currentCount} / {license.maxItems?.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1 text-sm">
+                      <div className="flex items-center gap-2 font-medium text-amber-600 dark:text-amber-400">
+                        <AlertTriangle className="h-4 w-4" /> {t("set.license.freeTitle")}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {t("set.license.usageLabel")}: <span className="text-foreground font-medium">{license.currentCount} / {license.freeLimit}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <Label>{t("set.license.keyLabel")}</Label>
+                <textarea
+                  value={licenseKeyInput}
+                  onChange={(e) => setLicenseKeyInput(e.target.value)}
+                  placeholder={t("set.license.keyPh")}
+                  rows={3}
+                  className="mt-2 w-full bg-background border border-input rounded-md px-3 py-2 text-xs font-mono resize-y"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  onClick={() => submitLicenseKey(licenseKeyInput)}
+                  disabled={licenseBusy || !licenseKeyInput.trim()}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-black"
+                >
+                  <Save className="h-4 w-4 mr-2" /> {licenseBusy ? t("set.saving") : t("set.license.save")}
+                </Button>
+                {license?.active && (
+                  <Button variant="outline" className="border-border" disabled={licenseBusy} onClick={() => submitLicenseKey("")}>
+                    {t("set.license.remove")}
+                  </Button>
+                )}
+              </div>
+
+              {feedback && (
+                <div className={`text-sm ${feedback.kind === "ok" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                  {feedback.text}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

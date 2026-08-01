@@ -8,9 +8,9 @@
  *
  *   node scripts/migrate-ad.js
  */
-const Database = require("better-sqlite3");
+const { openDatabase } = require("../lib/db-encryption");
 
-const db = new Database(process.env.DATABASE_URL || "./ar.db");
+const db = openDatabase(process.env.DATABASE_URL || "./ar.db");
 
 function tableExists(name) {
   return !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name);

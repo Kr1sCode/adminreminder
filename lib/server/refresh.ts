@@ -7,6 +7,8 @@ import { getCertificateExpiry, probeTlsEndpoint, normalizeFingerprint, EKU_SERVE
 import { getDomainExpiry } from "./domain";
 import { registrableDomainFor } from "./companion";
 import { isAutoCheckable } from "./expiry";
+import { getAdConfig } from "@/lib/ad/resolve";
+import { probeAdcsCertificateByDn } from "@/lib/ad/adcs";
 
 export interface RefreshResult {
   certChecked: boolean;
@@ -64,6 +66,32 @@ export async function refreshService(item: Service): Promise<RefreshResult> {
       patch.lastCheckedAt = new Date();
       patch.lastCheckStatus = "error";
       patch.lastCheckError = err.message || "Nie udało się sprawdzić punktu TLS";
+      result.errors.push(patch.lastCheckError as string);
+    }
+  } else if (item.type === "adcs") {
+    // identifier is the CA object's DN — no host/port, the certificate lives
+    // in AD's Configuration NC, not on any TLS endpoint (see lib/ad/adcs.ts).
+    try {
+      const config = await getAdConfig();
+      if (!config) {
+        throw new Error(
+          "Integracja z Active Directory nie jest skonfigurowana. Uzupełnij dane w Ustawieniach → Active Directory."
+        );
+      }
+      const probe = await probeAdcsCertificateByDn(config, item.identifier);
+      patch.expiryDate = probe.expiryDate;
+      patch.lastCheckedAt = new Date();
+      patch.lastCheckStatus = computeStatus(probe.expiryDate, expiringSoonDays).status;
+      patch.lastCheckError = null;
+      patch.customData = {
+        ...(item.customData || {}),
+        role: probe.selfSigned ? "Root CA" : "CA pośredni (Issuing)",
+      };
+      result.certChecked = true;
+    } catch (err: any) {
+      patch.lastCheckedAt = new Date();
+      patch.lastCheckStatus = "error";
+      patch.lastCheckError = err.message || "Nie udało się sprawdzić certyfikatu CA";
       result.errors.push(patch.lastCheckError as string);
     }
   } else if (isAutoCheckable(item.type)) {
