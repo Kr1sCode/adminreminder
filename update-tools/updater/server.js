@@ -81,9 +81,13 @@ function currentVersion() {
 /** Independent copy of lib/update-check.ts's fetchSignedManifest — see the
  *  file-level comment for why this doesn't just trust the caller instead. */
 async function fetchSignedManifest() {
+  // Generous vs. lib/update-check.ts's 8s: this runs from a sidecar
+  // container without the app service's dedicated internal-DNS config, so
+  // resolving api.github.com can take several seconds on its own on some
+  // deployments (observed ~7-8s end-to-end through a LAN resolver chain).
   const releaseRes = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases/latest`, {
     headers: { Accept: "application/vnd.github+json" },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(20000),
   });
   if (!releaseRes.ok) throw new Error(`GitHub API HTTP ${releaseRes.status}`);
   const release = await releaseRes.json();
@@ -91,7 +95,7 @@ async function fetchSignedManifest() {
   const asset = (release.assets || []).find((a) => a.name === MANIFEST_ASSET_NAME);
   if (!asset?.browser_download_url) throw new Error("brak update-manifest.jws w najnowszym release");
 
-  const manifestRes = await fetch(asset.browser_download_url, { signal: AbortSignal.timeout(8000) });
+  const manifestRes = await fetch(asset.browser_download_url, { signal: AbortSignal.timeout(20000) });
   if (!manifestRes.ok) throw new Error(`pobranie manifestu HTTP ${manifestRes.status}`);
   const token = (await manifestRes.text()).trim();
 
