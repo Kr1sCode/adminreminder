@@ -1,0 +1,9 @@
+{
+  "name": "adminreminder-updater",
+  "private": true,
+  "description": "Sidecar with docker.sock access that rebuilds/restarts the AdminReminder app container on a verified, signed release. See ../../lib/linux-updater.ts and ../sign-release.js.",
+  "type": "commonjs",
+  "dependencies": {
+    "jose": "^6.2.3"
+  }
+}

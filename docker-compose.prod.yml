@@ -81,6 +81,13 @@ services:
       - AD_VIEWER_GROUP_DN=${AD_VIEWER_GROUP_DN:-}
       - AD_TIMEOUT_MS=${AD_TIMEOUT_MS:-10000}
 
+      # One-click "Zainstaluj teraz" on Linux, mirroring the Windows
+      # auto-installer. Both unset (the default) = the dashboard falls back
+      # to a plain "see release" link, same as before this existed — set
+      # both only if the `updater` service below is also running.
+      - UPDATER_URL=${UPDATER_URL:-}
+      - UPDATE_SECRET=${UPDATE_SECRET:-}
+
     restart: always
     stop_grace_period: 20s
 
@@ -133,6 +140,36 @@ services:
             || echo "[cron] wywołanie nie powiodło się: $$(date -Iseconds)"
           sleep "$${CRON_INTERVAL_SECONDS}"
         done
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  # Opt-in one-click self-update (see update-tools/updater/, lib/linux-updater.ts):
+  #   docker compose -f docker-compose.prod.yml --profile selfupdate up -d
+  # Kept as its own minimal container specifically so docker.sock — which is
+  # effectively root on the host — never has to touch the hardened `app`
+  # container (cap_drop: ALL, no-new-privileges, holds AD/Entra/SMTP secrets).
+  # Re-verifies the signed release manifest itself before acting; see
+  # update-tools/updater/server.js for the full trust-boundary reasoning.
+  updater:
+    profiles: ["selfupdate"]
+    build:
+      context: ./update-tools/updater
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # The deployment directory itself (bind mount, not a named volume): the
+      # sidecar syncs the new release here and re-runs `docker compose` from
+      # it, so the host's own copy of the source stays authoritative — a
+      # later manual `tar | ssh` deploy sees exactly what's actually running.
+      - .:/workspace
+    environment:
+      - UPDATE_SECRET=${UPDATE_SECRET:?ustaw UPDATE_SECRET w .env (openssl rand -base64 32), tylko jesli wlaczasz profil selfupdate}
+      - DEPLOY_DIR=/workspace
+      - COMPOSE_FILES=docker-compose.prod.yml,docker-compose.override.yml
+      - COMPOSE_SERVICE=app
     logging:
       driver: json-file
       options:

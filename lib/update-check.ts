@@ -30,6 +30,10 @@ interface SignedManifest {
   /** Both present together or not at all — see update-tools/sign-release.js. */
   installerUrl?: string;
   installerSha256?: string;
+  /** Linux/Docker counterpart of installerUrl/installerSha256: a source
+   *  tarball (git archive) instead of an .exe. Also both-or-neither. */
+  sourceUrl?: string;
+  sourceSha256?: string;
 }
 
 export interface UpdateInfo {
@@ -41,10 +45,17 @@ export interface UpdateInfo {
    *  lib/windows-updater.ts refuses to run anything not matching this hash. */
   installerUrl?: string;
   installerSha256?: string;
+  /** Linux counterpart — lib/linux-updater.ts hands these to the updater
+   *  sidecar, which re-downloads and re-hashes before touching anything. */
+  sourceUrl?: string;
+  sourceSha256?: string;
   /** True only when this OS can actually run the download-and-run flow AND
-   *  the manifest actually offers an installer for it. The dashboard shows
-   *  the "Zainstaluj teraz" button only when this is true; otherwise it
-   *  falls back to a plain link, same as before auto-install existed. */
+   *  the manifest actually offers an installer/source for it. The dashboard
+   *  shows the "Zainstaluj teraz" button only when this is true; otherwise
+   *  it falls back to a plain link, same as before auto-install existed.
+   *  On Linux this additionally requires UPDATER_URL + UPDATE_SECRET to be
+   *  configured — most Linux deployments don't run the updater sidecar, and
+   *  for those this must stay false. */
   canAutoInstall: boolean;
 }
 
@@ -109,6 +120,18 @@ async function fetchSignedManifest(): Promise<SignedManifest | null> {
     }
   }
 
+  const sourceUrl = payload.sourceUrl;
+  const sourceSha256 = payload.sourceSha256;
+  if (typeof sourceUrl === "string" && typeof sourceSha256 === "string") {
+    if (
+      /^https:\/\/github\.com\/Kr1sCode\/adminreminder\/releases\/download\//i.test(sourceUrl) &&
+      /^[0-9a-f]{64}$/i.test(sourceSha256)
+    ) {
+      result.sourceUrl = sourceUrl;
+      result.sourceSha256 = sourceSha256.toLowerCase();
+    }
+  }
+
   return result;
 }
 
@@ -122,15 +145,30 @@ async function fetchSignedManifest(): Promise<SignedManifest | null> {
 export async function checkForUpdate(force = false): Promise<UpdateInfo | null> {
   const currentVersion = pkg.version;
   const isWindows = process.platform === "win32";
+  // The updater sidecar (update-tools/updater/) is opt-in per docker-compose
+  // profile — most Linux deployments never run it, so the button must stay
+  // hidden for them, same as it always has been.
+  const hasLinuxUpdater = process.platform === "linux" && !!process.env.UPDATER_URL && !!process.env.UPDATE_SECRET;
 
-  const toInfo = (m: { latestVersion: string; notesUrl: string; installerUrl?: string; installerSha256?: string }): UpdateInfo => ({
+  const toInfo = (m: {
+    latestVersion: string;
+    notesUrl: string;
+    installerUrl?: string;
+    installerSha256?: string;
+    sourceUrl?: string;
+    sourceSha256?: string;
+  }): UpdateInfo => ({
     currentVersion,
     latestVersion: m.latestVersion,
     notesUrl: m.notesUrl,
     installerUrl: m.installerUrl,
     installerSha256: m.installerSha256,
+    sourceUrl: m.sourceUrl,
+    sourceSha256: m.sourceSha256,
     available: isNewer(m.latestVersion, currentVersion),
-    canAutoInstall: isWindows && !!m.installerUrl && !!m.installerSha256,
+    canAutoInstall:
+      (isWindows && !!m.installerUrl && !!m.installerSha256) ||
+      (hasLinuxUpdater && !!m.sourceUrl && !!m.sourceSha256),
   });
 
   if (!force) {
@@ -155,6 +193,8 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
       notesUrl: manifest.notesUrl,
       installerUrl: manifest.installerUrl,
       installerSha256: manifest.installerSha256,
+      sourceUrl: manifest.sourceUrl,
+      sourceSha256: manifest.sourceSha256,
     };
     await setSetting("update_check_result", JSON.stringify(cacheable));
 

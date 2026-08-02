@@ -9,7 +9,8 @@
 // Usage:
 //   node update-tools/sign-release.js --version 1.3.0 \
 //     --notes-url https://github.com/Kr1sCode/adminreminder/releases/tag/v1.3.0 \
-//     --installer-path dist/installer/AdminReminder-Setup-1.3.0.exe
+//     --installer-path dist/installer/AdminReminder-Setup-1.3.0.exe \
+//     --source-path dist/adminreminder-src-1.3.0.tar.gz
 //
 // --installer-path is optional: omit it for a platform with no auto-install
 // (or before the .exe is built yet) and the manifest just won't offer one -
@@ -18,6 +19,14 @@
 // auto-installer (lib/windows-updater.ts) downloads whatever installerUrl
 // says and refuses to run it unless the hash matches exactly, so swapping the
 // GitHub release asset without the signing key can't get code executed.
+//
+// --source-path is the Linux/Docker counterpart, consumed by the updater
+// sidecar (update-tools/updater/) instead of lib/windows-updater.ts. It must
+// be built from a clean checkout of the PUBLIC repo (never this dev repo —
+// docker-compose.override.yml and similar dev-only files must not ship in a
+// public release asset) with a wrapping directory so the sidecar's
+// `tar --strip-components=1` lands the tree directly in the deploy dir:
+//   git archive --format=tar.gz --prefix=adminreminder/ -o dist/adminreminder-src-1.3.0.tar.gz v1.3.0
 //
 // Publish the printed token as a release asset named exactly
 // "update-manifest.jws" on the GitHub release. lib/update-check.ts looks for
@@ -45,6 +54,8 @@ async function main() {
   const notesUrl = arg("notes-url");
   const installerPath = arg("installer-path");
   const installerUrlOverride = arg("installer-url");
+  const sourcePath = arg("source-path");
+  const sourceUrlOverride = arg("source-url");
   const keyPath = arg(
     "private-key",
     path.join(os.homedir(), "adminreminder-update-signing-private-key.pem")
@@ -81,6 +92,17 @@ async function main() {
       `https://github.com/Kr1sCode/adminreminder/releases/download/v${version}/${path.basename(installerPath)}`;
   }
 
+  if (sourcePath) {
+    if (!fs.existsSync(sourcePath)) {
+      console.error(`Nie znaleziono archiwum zrodel: ${sourcePath}`);
+      process.exit(1);
+    }
+    payload.sourceSha256 = sha256File(sourcePath);
+    payload.sourceUrl =
+      sourceUrlOverride ||
+      `https://github.com/Kr1sCode/adminreminder/releases/download/v${version}/${path.basename(sourcePath)}`;
+  }
+
   const privateKey = await importPKCS8(fs.readFileSync(keyPath, "utf8"), "EdDSA");
 
   const token = await new SignJWT(payload)
@@ -94,7 +116,13 @@ async function main() {
     console.error(`[sign-release] instalator: ${payload.installerUrl}`);
     console.error(`[sign-release] sha256: ${payload.installerSha256}`);
   } else {
-    console.error("[sign-release] bez instalatora w manifescie - auto-instalacja bedzie niedostepna dla tego wydania.");
+    console.error("[sign-release] bez instalatora w manifescie - auto-instalacja bedzie niedostepna dla Windows w tym wydaniu.");
+  }
+  if (payload.sourceSha256) {
+    console.error(`[sign-release] zrodla: ${payload.sourceUrl}`);
+    console.error(`[sign-release] sha256: ${payload.sourceSha256}`);
+  } else {
+    console.error("[sign-release] bez archiwum zrodel w manifescie - auto-aktualizacja bedzie niedostepna dla Linuksa w tym wydaniu.");
   }
   console.error('[sign-release] wrzuc powyzszy token jako asset "update-manifest.jws" w GitHub Release.');
 }
