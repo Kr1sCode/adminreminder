@@ -21,8 +21,12 @@ import type { Client } from "ldapts";
 
 export interface AdcsCertificate {
   /** "Certification Authorities" holds the trusted (usually root) CAs; "AIA"
-   *  holds what a client needs to build a chain — normally the issuing CAs. */
-  container: "certification-authorities" | "aia";
+   *  holds what a client needs to build a chain — normally the issuing CAs.
+   *  "nt-auth" is the fallback source for a standalone (non-enterprise) CA: it
+   *  never registers itself under Certification Authorities/AIA — an admin
+   *  trusts it by hand via certutil -dspublish, which only ever lands it in
+   *  NTAuthCertificates. */
+  container: "certification-authorities" | "aia" | "nt-auth";
   cn: string;
   dn: string;
   subject?: string;
@@ -97,12 +101,61 @@ function roleLabel(cert: AdcsCertificate): string {
   return cert.selfSigned ? "Root CA" : "CA pośredni (Issuing)";
 }
 
+/** Extracts the CN from an X.509 subject string ("CN=foo,DC=bar" -> "foo") —
+ *  NTAuthCertificates carries no per-cert AD object of its own to read a cn
+ *  attribute from, so the certificate's own subject is the only name available. */
+function cnFromSubject(subject: string | undefined): string {
+  return subject?.match(/CN=([^,]+)/)?.[1]?.trim() || "CA";
+}
+
 /**
- * Walks CN=Certification Authorities and CN=AIA under the Configuration NC and
- * returns every CA certificate found. A CA published in both containers (common
- * for a root CA) is deduplicated by fingerprint, keeping the
- * "Certification Authorities" copy — that container is the authoritative
- * trust list, AIA is just where clients fetch certs for chain-building.
+ * NTAuthCertificates is not a container of per-CA child objects like the two
+ * above — it is a single object whose own (multi-valued) cACertificate
+ * attribute lists every CA trusted for client authentication, standalone CAs
+ * included. An enterprise CA publishes itself here too, alongside
+ * Certification Authorities/AIA (caught by the fingerprint dedup below); a
+ * standalone CA — added by hand via `certutil -dspublish -f ca.cer NTAuthCA`,
+ * never through autoenrollment — exists ONLY here, which is exactly the case
+ * discoverAdcsCertificates would otherwise miss entirely.
+ */
+async function discoverNtAuthCertificates(client: Client, configNC: string): Promise<AdcsCertificate[]> {
+  const dn = `CN=NTAuthCertificates,CN=Public Key Services,CN=Services,${configNC}`;
+  let entry;
+  try {
+    const { searchEntries } = await client.search(dn, {
+      scope: "base",
+      filter: "(objectClass=*)",
+      attributes: [],
+      explicitBufferAttributes: ["cACertificate"],
+    });
+    entry = searchEntries[0];
+  } catch {
+    return []; // No AD CS ever installed: this object does not exist either.
+  }
+  if (!entry) return [];
+
+  const certs: AdcsCertificate[] = [];
+  for (const buf of asBufferArray(entry.cACertificate)) {
+    let cert: X509Certificate;
+    try {
+      cert = new X509Certificate(buf);
+    } catch {
+      continue;
+    }
+    certs.push(toAdcsCertificate("nt-auth", cnFromSubject(cert.subject), dn, cert));
+  }
+  return certs;
+}
+
+/**
+ * Walks CN=Certification Authorities and CN=AIA under the Configuration NC,
+ * then falls back to CN=NTAuthCertificates for whatever those two missed, and
+ * returns every CA certificate found. A CA published in more than one of
+ * these (common for a root CA — Certification Authorities AND NTAuth) is
+ * deduplicated by fingerprint, keeping the "Certification Authorities" copy:
+ * that container is the authoritative trust list and gives each CA its own
+ * AD object (a stable per-CA DN), where NTAuthCertificates only ever offers
+ * one shared object for however many CAs it lists.
  */
 export async function discoverAdcsCertificates(config: AdConfig): Promise<AdcsCertificate[]> {
   return withServiceBind(config, async (client) => {
@@ -142,13 +195,34 @@ export async function discoverAdcsCertificates(config: AdConfig): Promise<AdcsCe
       }
     }
 
+    for (const parsed of await discoverNtAuthCertificates(client, configNC)) {
+      if (!seen.has(parsed.fingerprint256)) {
+        seen.set(parsed.fingerprint256, parsed);
+      }
+    }
+
     return [...seen.values()];
   });
 }
 
-/** Re-reads a single CA object by DN — the per-item "Sprawdź teraz" path, and
- *  what a hand-added row (e.g. a CA in another forest) is checked against. */
-export async function probeAdcsCertificateByDn(config: AdConfig, dn: string): Promise<AdcsCertificate> {
+/**
+ * Re-reads a single CA by identifier — the per-item "Sprawdź teraz" path, and
+ * what a hand-added row (e.g. a CA in another forest) is checked against.
+ *
+ * A plain DN identifies exactly one cert everywhere except NTAuthCertificates,
+ * which shares one AD object across however many CAs it lists — sync (above)
+ * stores those as "dn#fingerprint256" so a refresh can pick out the one this
+ * row actually represents, instead of "whichever happens to be on that object
+ * now". A bare NTAuthCertificates DN with no "#" (a hand-added row predating
+ * this, or someone pasting the container DN directly) falls back to the old
+ * "soonest expiring on this object" behaviour — correct as long as it holds
+ * only the one CA, same limitation manual entries already had.
+ */
+export async function probeAdcsCertificateByDn(config: AdConfig, identifier: string): Promise<AdcsCertificate> {
+  const hashIdx = identifier.indexOf("#");
+  const dn = hashIdx === -1 ? identifier : identifier.slice(0, hashIdx);
+  const wantFingerprint = hashIdx === -1 ? null : identifier.slice(hashIdx + 1);
+
   return withServiceBind(config, async (client) => {
     const { searchEntries } = await client.search(dn, {
       scope: "base",
@@ -162,13 +236,32 @@ export async function probeAdcsCertificateByDn(config: AdConfig, dn: string): Pr
     }
 
     const buffers = asBufferArray(entry.cACertificate);
+    const foundDn = first(entry.distinguishedName) ?? entry.dn ?? dn;
+
+    if (wantFingerprint) {
+      const match = buffers
+        .map((buf) => {
+          try {
+            return new X509Certificate(buf);
+          } catch {
+            return null;
+          }
+        })
+        .find((c) => c?.fingerprint256 === wantFingerprint);
+      if (!match) {
+        throw new CertCheckError(
+          "Ten certyfikat CA zniknął z NTAuthCertificates w AD (odcisk już tam nie występuje).",
+          "NO_CERT"
+        );
+      }
+      return toAdcsCertificate("nt-auth", cnFromSubject(match.subject), foundDn, match);
+    }
+
     const cert = pickCertificate(buffers);
     if (!cert) {
       throw new CertCheckError("Obiekt istnieje, ale nie ma atrybutu cACertificate.", "NO_CERT");
     }
-
     const cn = first(entry.cn) ?? "CA";
-    const foundDn = first(entry.distinguishedName) ?? entry.dn ?? dn;
     // The container is unknown when probing by bare DN; role is still derivable.
     return toAdcsCertificate("certification-authorities", cn, foundDn, cert);
   });
@@ -207,7 +300,15 @@ export async function syncAdcsCertificates(): Promise<AdcsSyncResult> {
   const result: AdcsSyncResult = { created: 0, updated: 0, removed: 0, total: found.length };
 
   for (const cert of found) {
-    const identifier = cert.dn.trim().toLowerCase();
+    // NTAuthCertificates shares one AD object across every CA it lists, so the
+    // DN alone cannot tell two of them apart the way it can for a CA with its
+    // own object under Certification Authorities/AIA — the fingerprint makes
+    // the identifier unique per certificate. probeAdcsCertificateByDn (above)
+    // is what parses this back apart on every "Sprawdź teraz".
+    const identifier =
+      cert.container === "nt-auth"
+        ? `${cert.dn.trim().toLowerCase()}#${cert.fingerprint256}`
+        : cert.dn.trim().toLowerCase();
     seen.add(identifier);
 
     const values = {
