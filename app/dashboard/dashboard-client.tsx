@@ -255,6 +255,18 @@ export function DashboardClient({
     sni: "",
     pin: "",
   });
+  // "Dni do końca" next to the date field — a write-only calculator, not a
+  // stored field: typing a number fills form.expiryDate, nothing reads it back.
+  const [expiryDaysInput, setExpiryDaysInput] = useState("");
+
+  function applyExpiryDays(daysStr: string) {
+    setExpiryDaysInput(daysStr);
+    const days = parseInt(daysStr, 10);
+    if (!Number.isFinite(days)) return;
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    setForm((f) => ({ ...f, expiryDate: d.toISOString().split('T')[0] }));
+  }
 
   const filteredItems = items
     .filter((item) => {
@@ -436,6 +448,7 @@ export function DashboardClient({
       sni: "",
       pin: "",
     });
+    setExpiryDaysInput("");
     setShowAddDialog(true);
   }
 
@@ -455,6 +468,7 @@ export function DashboardClient({
       sni: item.customData?.sni || "",
       pin: item.customData?.pin || "",
     });
+    setExpiryDaysInput("");
     setShowAddDialog(true);
   }
 
@@ -1174,11 +1188,24 @@ export function DashboardClient({
 
             <div>
               <Label className="text-sm font-medium text-foreground/90">{t("dlg.expiryDate")}</Label>
-              <Input 
-                type="date" 
-                value={form.expiryDate} 
-                onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} 
-              />
+              <div className="flex items-center gap-2">
+                <Input
+                  type="date"
+                  value={form.expiryDate}
+                  onChange={(e) => { setExpiryDaysInput(""); setForm({ ...form, expiryDate: e.target.value }); }}
+                  className="flex-1"
+                />
+                <span className="text-xs text-muted-foreground shrink-0">{t("dlg.expiryOr")}</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={expiryDaysInput}
+                  onChange={(e) => applyExpiryDays(e.target.value)}
+                  placeholder={t("dlg.expiryDaysPh")}
+                  className="w-28 shrink-0"
+                />
+                <span className="text-xs text-muted-foreground shrink-0">{t("dlg.expiryDaysUnit")}</span>
+              </div>
               <p className="text-xs text-muted-foreground mt-1">{t("dlg.expiryHint")}</p>
             </div>
 
