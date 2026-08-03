@@ -18,8 +18,9 @@ import { format } from "date-fns";
 import { useEffect } from "react";
 import { useT, useI18n } from "@/components/i18n-provider";
 
-/** Mirrors SECRET_KEYS/MASK in lib/settings.ts: echoing it back means "unchanged". */
-const MASK = "••••••••";
+/** Mirrors isMasked() in lib/settings.ts: echoing an all-mask-char value back means "unchanged". */
+const MASK_CHAR = "•";
+const isMasked = (value: string) => value.length > 0 && [...value].every((c) => c === MASK_CHAR);
 
 type User = {
   id: number;
@@ -97,7 +98,7 @@ function SecretInput({
         className="mt-2 font-mono"
       />
       <p className="text-xs text-muted-foreground mt-1">
-        {get(k) === MASK ? t("set.secretStored") : t("set.secretWillEncrypt")}
+        {isMasked(get(k)) ? t("set.secretStored") : t("set.secretWillEncrypt")}
       </p>
     </>
   );
@@ -179,6 +180,10 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
   const [licenseKeyInput, setLicenseKeyInput] = useState("");
   const [licenseBusy, setLicenseBusy] = useState(false);
 
+  // AD watchdog: cached status from lib/ad/health.ts, refreshed in the
+  // background by the scheduler every 5 min — this just polls that cache.
+  const [adHealth, setAdHealth] = useState<{ status: "ok" | "error"; message: string; checkedAt: number } | null>(null);
+
   // ── Automatyzacja (wbudowany harmonogram) ──────────────────────────────────
   type AutoState = {
     enabled: boolean; cron: string; valid: boolean; error: string | null; timezone: string;
@@ -204,8 +209,17 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
     loadApiKeys();
     loadAutomation();
     loadLicense();
+    loadAdHealth();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // While the AD tab is open, poll the cached watchdog status so the light
+  // catches up with the scheduler's background checks without a reload.
+  useEffect(() => {
+    if (tab !== "ad") return;
+    const handle = setInterval(loadAdHealth, 30_000);
+    return () => clearInterval(handle);
+  }, [tab]);
 
   // Canonical cron expression derived from the builder inputs.
   const autoCron = useMemo(() => {
@@ -372,6 +386,13 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
     } catch { /* ignoruj */ }
   }
 
+  async function loadAdHealth() {
+    try {
+      const res = await fetch("/api/ad/health");
+      if (res.ok) setAdHealth((await res.json()).health);
+    } catch { /* ignoruj */ }
+  }
+
   async function submitLicenseKey(key: string) {
     setLicenseBusy(true);
     try {
@@ -395,9 +416,12 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
     }
   }
 
+  // Errors stay on screen until the next action replaces or clears them —
+  // a transient success toast is fine to auto-dismiss, a connection failure
+  // that goes away on its own reads as "fixed" when nothing changed.
   function notify(kind: "ok" | "error", text: string, ms = 4000) {
     setFeedback({ kind, text });
-    setTimeout(() => setFeedback(null), ms);
+    if (kind === "ok") setTimeout(() => setFeedback(null), ms);
   }
 
   async function saveSettings(extra: Record<string, string> = {}) {
@@ -853,16 +877,38 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                   {saving ? t("set.saving") : t("set.save")}
                 </Button>
                 <Button variant="outline" className="border-border" disabled={busy !== null}
-                  onClick={() => runAction("ad-test", "/api/ad/test",
-                    (d) => t("set.ad.testResult", { accountsFound: d.accountsFound, warnings: d.warnings?.length ? " " + t("set.ad.warningsPrefix") + " " + d.warnings.join(" ") : "" }))}>
+                  onClick={async () => {
+                    await runAction("ad-test", "/api/ad/test",
+                      (d) => t("set.ad.testResult", { accountsFound: d.accountsFound, warnings: d.warnings?.length ? " " + t("set.ad.warningsPrefix") + " " + d.warnings.join(" ") : "" }));
+                    loadAdHealth();
+                  }}>
                   {busy === "ad-test" ? t("set.ad.connecting") : t("set.ad.testConn")}
                 </Button>
                 <Button variant="outline" className="border-border" disabled={busy !== null}
-                  onClick={() => runAction("ad-sync", "/api/ad/sync",
-                    (d) => t("set.ad.syncResult", { created: d.created, updated: d.updated, removed: d.removed, technical: d.technical, functional: d.functional }))}>
+                  onClick={async () => {
+                    await runAction("ad-sync", "/api/ad/sync",
+                      (d) => t("set.ad.syncResult", { created: d.created, updated: d.updated, removed: d.removed, technical: d.technical, functional: d.functional }));
+                    loadAdHealth();
+                  }}>
                   {busy === "ad-sync" ? t("set.syncing") : t("set.ad.syncAccounts")}
                 </Button>
               </div>
+
+              {adHealth && (
+                <div className={`flex items-center gap-2 text-xs rounded-lg border p-2.5 ${
+                  adHealth.status === "ok"
+                    ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400"
+                    : "border-red-500/30 bg-red-500/5 text-red-600 dark:text-red-400"
+                }`}>
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${adHealth.status === "ok" ? "bg-emerald-500" : "bg-red-500 animate-pulse"}`} />
+                  <span className="flex-1">
+                    {adHealth.status === "ok" ? t("set.ad.healthOk") : t("set.ad.healthError", { message: adHealth.message })}
+                  </span>
+                  <span className="text-muted-foreground shrink-0">
+                    {t("set.ad.healthCheckedAt", { time: new Date(adHealth.checkedAt).toLocaleTimeString(locale) })}
+                  </span>
+                </div>
+              )}
 
               {feedback && (
                 <div className={`text-sm ${feedback.kind === "ok" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>

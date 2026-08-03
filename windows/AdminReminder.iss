@@ -169,8 +169,12 @@ begin
 
     // LAN reachability out of the box; the operator can tighten scope later —
     // this is the same trade-off the Docker demo image makes with 0.0.0.0.
+    // Scoped to node.exe itself (program=), not "any process on this port":
+    // without it Windows Firewall treats the rule as a blanket port-open that
+    // would keep working even if something else later listened on Port.
     Exec('netsh.exe',
-      'advfirewall firewall add rule name="AdminReminder" dir=in action=allow protocol=TCP localport=' + Port,
+      'advfirewall firewall add rule name="AdminReminder" dir=in action=allow protocol=TCP localport=' + Port +
+      ' program="' + AppDirPath + '\node.exe"',
       AppDirPath, SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
     NssmExec('start AdminReminder');

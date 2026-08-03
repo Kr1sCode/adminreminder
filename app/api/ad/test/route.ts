@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getAdConfig } from "@/lib/ad/resolve";
 import { adSecurityWarnings, AdConfigError } from "@/lib/ad/config";
 import { withServiceBind, searchPaged } from "@/lib/ad/client";
+import { recordAdHealth } from "@/lib/ad/health";
 
 /**
  * Binds with the service account and counts user objects, without writing
@@ -31,6 +32,7 @@ export async function POST() {
       searchPaged(client, config.baseDn, "(&(objectCategory=person)(objectClass=user))", ["sAMAccountName"])
     );
 
+    await recordAdHealth("ok", "Połączono z kontrolerem domeny.");
     return NextResponse.json({
       success: true,
       accountsFound: entries.length,
@@ -39,6 +41,8 @@ export async function POST() {
     });
   } catch (e: any) {
     console.error("AD test error:", e);
-    return NextResponse.json({ error: e.message || "Nie udało się połączyć z kontrolerem domeny" }, { status: 502 });
+    const message = e.message || "Nie udało się połączyć z kontrolerem domeny";
+    await recordAdHealth("error", message);
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 }

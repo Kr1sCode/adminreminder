@@ -12,6 +12,7 @@ import { getSetting, setSetting } from "./settings";
 import { runChecks } from "./check";
 import { sendNotifications } from "./notify";
 import { sendAdAccountNotifications } from "./ad/notify-accounts";
+import { refreshAdHealthIfStale } from "./ad/health";
 
 export interface CronFields {
   minute: Set<number>;
@@ -153,6 +154,11 @@ const TICK_MS = 30_000;
 const CATCHUP_MS = 90 * 60_000; // after a pause/downtime, look back at most 90 min
 
 async function tick() {
+  // Runs every tick regardless of the "automation_enabled" toggle below: the
+  // AD watchdog light is core reliability monitoring, not the opt-in
+  // notification automation, and rate-limits its own actual bind attempts.
+  refreshAdHealthIfStale().catch((e) => console.error("[AR] AD health tick error:", e));
+
   try {
     const enabled = (await getSetting("automation_enabled", "false")) === "true";
     const now = Date.now();

@@ -30,8 +30,18 @@ export const SECRET_KEYS = new Set([
   "webhook_secret",
 ]);
 
-/** Sentinel the UI echoes back for an unchanged secret; must never be persisted. */
-export const MASK = "••••••••";
+/**
+ * The UI echoes back a string of this character to mean "unchanged"; must
+ * never be persisted. Its length varies per secret — see getAllSettings —
+ * so "unchanged" is detected by composition (all mask char), not by a fixed
+ * string. isMasked() below is the single source of truth for that check.
+ */
+export const MASK_CHAR = "•";
+
+/** True for anything that is only the mask character — i.e. an untouched secret field. */
+export function isMasked(value: string): boolean {
+  return value.length > 0 && [...value].every((c) => c === MASK_CHAR);
+}
 
 export async function getSetting(key: string, defaultValue?: string): Promise<string | undefined> {
   const row = await db.select().from(settings).where(eq(settings.key, key)).limit(1);
@@ -48,8 +58,9 @@ export async function getSecret(key: string): Promise<string | undefined> {
 }
 
 /**
- * Settings safe to hand to an admin's browser: secrets collapse to MASK when
- * present and to "" when unset.
+ * Settings safe to hand to an admin's browser: secrets collapse to a mask
+ * when present (as many mask characters as the real secret is long, so the
+ * field reads like a genuine password field) and to "" when unset.
  */
 export async function getAllSettings(): Promise<Record<string, string>> {
   const rows = await db.select().from(settings);
@@ -57,7 +68,11 @@ export async function getAllSettings(): Promise<Record<string, string>> {
 
   for (const row of rows) {
     if (row.value == null) continue;
-    result[row.key] = SECRET_KEYS.has(row.key) ? (row.value ? MASK : "") : row.value;
+    if (SECRET_KEYS.has(row.key)) {
+      result[row.key] = row.value ? MASK_CHAR.repeat(decryptSecret(row.value).length) : "";
+    } else {
+      result[row.key] = row.value;
+    }
   }
 
   for (const key of SECRET_KEYS) {
@@ -69,7 +84,7 @@ export async function getAllSettings(): Promise<Record<string, string>> {
 
 export async function setSetting(key: string, value: string) {
   // Echoing the mask back means "leave this secret alone".
-  if (SECRET_KEYS.has(key) && value === MASK) return;
+  if (SECRET_KEYS.has(key) && isMasked(value)) return;
 
   const stored = SECRET_KEYS.has(key) && value !== "" ? encryptSecret(value) : value;
 

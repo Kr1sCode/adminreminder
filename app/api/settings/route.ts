@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { getAllSettings, setSetting, SECRET_KEYS, MASK } from "@/lib/settings";
+import { getAllSettings, setSetting, SECRET_KEYS, isMasked } from "@/lib/settings";
 import { recordAudit } from "@/lib/audit";
 
 export async function GET() {
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
     // Key names only. A settings row may hold an SMTP password or a client
     // secret, and an audit log that leaks them is worse than no log at all.
     // Echoing the mask back means "leave alone", so those keys are not reported.
-    const reported = changed.filter((k) => !(SECRET_KEYS.has(k) && body[k] === MASK));
+    const reported = changed.filter((k) => !(SECRET_KEYS.has(k) && isMasked(body[k] as string)));
 
     if (reported.length > 0) {
       await recordAudit({
