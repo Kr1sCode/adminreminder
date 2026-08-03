@@ -66,6 +66,21 @@ Name: "{group}\Odinstaluj AdminReminder"; Filename: "{uninstallexe}"
 [Code]
 var
   ConfigPage: TInputQueryWizardPage;
+  UpgradePage: TInputOptionWizardPage;
+
+// Existing service or data dir means a previous install is already here —
+// silently upgrading in place with no visible choice left people unsure
+// whether they'd just lost their database or ended up with two copies.
+function DetectExistingInstall: Boolean;
+begin
+  Result := FileExists(ExpandConstant('{commonappdata}\AdminReminder\.env')) or
+    RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\AdminReminder');
+end;
+
+function WipeRequested: Boolean;
+begin
+  Result := (UpgradePage <> nil) and (UpgradePage.SelectedValueIndex = 1);
+end;
 
 function GetAppUrl(Param: String): String;
 begin
@@ -86,6 +101,18 @@ end;
 
 procedure InitializeWizard;
 begin
+  if DetectExistingInstall then
+  begin
+    UpgradePage := CreateInputOptionPage(wpWelcome,
+      'Wykryto istniejaca instalacje',
+      'AdminReminder jest juz zainstalowany na tym komputerze',
+      'Wybierz, co ma zrobic instalator:',
+      True, False);
+    UpgradePage.Add('Zaktualizuj — zachowaj baze danych, ustawienia i haslo (zalecane)');
+    UpgradePage.Add('Zacznij od nowa — usun baze danych, ustawienia i wszystkie zapisane hasla');
+    UpgradePage.SelectedValueIndex := 0;
+  end;
+
   ConfigPage := CreateInputQueryPage(wpSelectDir,
     'Konfiguracja AdminReminder',
     'Port i publiczny adres aplikacji',
@@ -140,18 +167,26 @@ begin
     Port := ConfigPage.Values[0];
     Origin := ConfigPage.Values[1];
 
+    // Stop before touching any files under DataDirPath: a running service
+    // holds the SQLite file open, and a wipe below must not fight the
+    // service for that lock. Ignored if the service never existed.
+    NssmExec('stop AdminReminder');
+
+    if WipeRequested then
+      DelTree(DataDirPath, True, True, True);
+
     ForceDirectories(DataDirPath + '\data');
     ForceDirectories(DataDirPath + '\logs');
 
     // Never overwrites an existing .env — an upgrade over a live install must
-    // keep the secrets and any hand-added AD_*/AZURE_*/SMTP settings.
+    // keep the secrets and any hand-added AD_*/AZURE_*/SMTP settings. When
+    // WipeRequested wiped it above, this generates a brand new one instead.
     Exec(AppDirPath + '\node.exe',
       '"' + AppDirPath + '\generate-env.js" --data-dir "' + DataDirPath + '" --port "' + Port + '" --app-origin "' + Origin + '"',
       AppDirPath, SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
     // A re-run (upgrade/repair) must not fail on "service already exists" —
     // tear down whatever is there first, ignoring errors if it never existed.
-    NssmExec('stop AdminReminder');
     NssmExec('remove AdminReminder confirm');
 
     // node.exe directly, not through powershell.exe - see the file header.
