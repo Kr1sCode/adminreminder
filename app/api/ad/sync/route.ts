@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { syncAdAccounts } from "@/lib/ad/sync";
-import { adSecurityWarnings, AdConfigError } from "@/lib/ad/config";
+import { syncAllAdDirectories } from "@/lib/ad/sync";
+import { adSecurityWarnings } from "@/lib/ad/config";
 import { getAdConfig } from "@/lib/ad/resolve";
 import { recordAdHealth } from "@/lib/ad/health";
 
@@ -21,26 +21,29 @@ export async function GET() {
   }
 }
 
+/** Syncs every enabled AD directory (used by the "Synchronizuj" button on the
+ *  Katalog AD page). A single client's DC being unreachable never blocks the
+ *  others — see lib/ad/sync.ts's syncAllAdDirectories. Per-directory actions
+ *  (test/sync one) live under /api/directories/[id]/*. */
 export async function POST() {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
     return NextResponse.json({ error: "Tylko administrator" }, { status: 403 });
   }
 
-  // "Not configured" is not a health event — only a genuine attempt to bind
-  // (config present, credentials wrong or the DC unreachable) should move
-  // the watchdog light in Ustawienia → Active Directory.
-  const configured = await getAdConfig().catch(() => null);
-
-  try {
-    const result = await syncAdAccounts();
-    if (configured) await recordAdHealth("ok", "Połączono z kontrolerem domeny.");
-    return NextResponse.json({ success: true, ...result });
-  } catch (e: any) {
-    console.error("AD sync error:", e);
-    const status = e instanceof AdConfigError ? 400 : 500;
-    const message = e.message || "Błąd synchronizacji z AD";
-    if (configured) await recordAdHealth("error", message);
-    return NextResponse.json({ error: message }, { status });
+  const outcomes = await syncAllAdDirectories();
+  for (const o of outcomes) {
+    await recordAdHealth(o.directoryId, o.error ? "error" : "ok", o.error || "Połączono z kontrolerem domeny.");
   }
+
+  const failed = outcomes.filter((o) => o.error);
+  if (outcomes.length > 0 && failed.length === outcomes.length) {
+    const message =
+      outcomes.length === 1
+        ? failed[0].error!
+        : `Żaden z ${failed.length} katalogów AD nie zsynchronizował się.`;
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
+
+  return NextResponse.json({ success: true, outcomes });
 }

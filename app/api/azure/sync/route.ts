@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import { syncAzureCredentials } from "@/lib/azure/sync";
+import { syncAllAzureCredentials } from "@/lib/azure/sync";
 import { isAzureConfigured } from "@/lib/azure/graph";
 
 export async function GET() {
@@ -11,17 +11,20 @@ export async function GET() {
   return NextResponse.json({ configured: await isAzureConfigured() });
 }
 
+/** Syncs app-registration credentials for every enabled Entra directory. */
 export async function POST() {
   const user = await getCurrentUser();
   if (!user || user.role !== "admin") {
     return NextResponse.json({ error: "Tylko administrator" }, { status: 403 });
   }
 
-  try {
-    const result = await syncAzureCredentials();
-    return NextResponse.json({ success: true, ...result });
-  } catch (e: any) {
-    console.error("Azure sync error:", e);
-    return NextResponse.json({ error: e.message || "Błąd synchronizacji z Azure" }, { status: 500 });
+  const outcomes = await syncAllAzureCredentials();
+  const failed = outcomes.filter((o) => o.error);
+  if (outcomes.length > 0 && failed.length === outcomes.length) {
+    const message =
+      outcomes.length === 1 ? failed[0].error! : `Żaden z ${failed.length} tenantów Entra nie zsynchronizował się.`;
+    return NextResponse.json({ error: message }, { status: 500 });
   }
+
+  return NextResponse.json({ success: true, outcomes });
 }

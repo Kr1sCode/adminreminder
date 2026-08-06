@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth";
 import { TopNav } from "../top-nav";
 import { HistoryClient } from "./history-client";
 import { getT } from "@/lib/i18n/server";
+import pkg from "@/package.json";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,9 @@ export default async function HistoryPage() {
       <footer className="shrink-0 w-full px-6 py-3 border-t border-border text-xs text-muted-foreground">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-1">
           <span>{t("hist.footerNote")}</span>
-          <span className="whitespace-nowrap">{t("footer.rights")}</span>
+          <span className="whitespace-nowrap">
+            {t("footer.rights")} · {t("footer.version", { version: pkg.version })}
+          </span>
         </div>
       </footer>
     </div>

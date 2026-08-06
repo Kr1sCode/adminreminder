@@ -28,12 +28,13 @@ export async function GET() {
  * that was just added — or a side that was just switched back on — is allowed to
  * fire, and a removed one stops lingering. An OU covers its whole subtree, which
  * the DN suffix identifies; the table mirrors a directory, small enough to filter
- * in memory.
+ * in memory. Scoped to one directoryId: two forests can share an OU's exact DN,
+ * and a reset for one must never touch the other's identically-named OU.
  */
-async function resetFiredThresholds(scope: AdNotifyScope, target: string, sides: AdSide[]) {
+async function resetFiredThresholds(directoryId: number, scope: AdNotifyScope, target: string, sides: AdSide[]) {
   if (sides.length === 0) return;
 
-  const rows = await db.select().from(adAccounts);
+  const rows = await db.select().from(adAccounts).where(eq(adAccounts.directoryId, directoryId));
   const needle = target.toLowerCase();
 
   const affected = rows.filter((row) => {
@@ -70,6 +71,7 @@ function parseThresholds(
 }
 
 interface Body {
+  directoryId?: number;
   scope?: string;
   target?: string;
   /** false records an explicit silence; pass remove:true to inherit again. */
@@ -103,24 +105,31 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Nieprawidłowe żądanie" }, { status: 400 });
   }
 
+  const directoryId = body.directoryId;
   const scope = body.scope as AdNotifyScope;
   const target = (body.target || "").trim();
 
-  if (!AD_NOTIFY_SCOPES.includes(scope) || !target) {
+  if (!directoryId || !AD_NOTIFY_SCOPES.includes(scope) || !target) {
     return NextResponse.json({ error: "Nieprawidłowy zakres powiadomień" }, { status: 400 });
   }
 
   const [existing] = await db
     .select()
     .from(adNotifyPolicies)
-    .where(and(eq(adNotifyPolicies.scope, scope), eq(adNotifyPolicies.target, target)))
+    .where(
+      and(
+        eq(adNotifyPolicies.directoryId, directoryId),
+        eq(adNotifyPolicies.scope, scope),
+        eq(adNotifyPolicies.target, target)
+      )
+    )
     .limit(1);
 
   if (body.remove) {
     if (existing) await db.delete(adNotifyPolicies).where(eq(adNotifyPolicies.id, existing.id));
     // The target may now fall under a different policy, so nothing it recorded
     // as "already sent" can be trusted.
-    await resetFiredThresholds(scope, target, ["password", "account"]);
+    await resetFiredThresholds(directoryId, scope, target, ["password", "account"]);
 
     await recordAudit({
       actor: user,
@@ -189,7 +198,7 @@ export async function PATCH(request: NextRequest) {
   if (account.value !== (existing?.accountDays ?? null) || notifyAccount !== (existing?.notifyAccount ?? true)) {
     dirty.push("account");
   }
-  await resetFiredThresholds(scope, target, dirty);
+  await resetFiredThresholds(directoryId, scope, target, dirty);
 
   const values = {
     enabled,
@@ -205,7 +214,7 @@ export async function PATCH(request: NextRequest) {
   if (existing) {
     await db.update(adNotifyPolicies).set(values).where(eq(adNotifyPolicies.id, existing.id));
   } else {
-    await db.insert(adNotifyPolicies).values({ scope, target, ...values, createdAt: now });
+    await db.insert(adNotifyPolicies).values({ directoryId, scope, target, ...values, createdAt: now });
   }
 
   await recordAudit({
@@ -224,6 +233,6 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    policy: { scope, target, ...values, mutedUntil: mutedUntil?.toISOString() ?? null },
+    policy: { directoryId, scope, target, ...values, mutedUntil: mutedUntil?.toISOString() ?? null },
   });
 }

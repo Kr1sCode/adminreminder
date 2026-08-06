@@ -199,6 +199,20 @@ export async function login(username: string, password: string): Promise<LoginRe
       result.identity.samAccountName.toLowerCase(),
       result.identity.role
     );
+
+    // Same second-factor gate as the local branch above: AD only vouches for
+    // the password, on-prem LDAP bind has no MFA concept of its own, so an
+    // admin-required or self-enrolled TOTP for this mirrored row must still
+    // be honoured here rather than going straight to a session.
+    if (adUser.mfaEnabled) {
+      await setMfaPending(adUser.id, "verify");
+      return { success: false, mfa: "verify" };
+    }
+    if (adUser.mfaRequired) {
+      await setMfaPending(adUser.id, "enroll");
+      return { success: false, mfa: "enroll" };
+    }
+
     await startSession(adUser);
     return { success: true };
   } catch (err: any) {

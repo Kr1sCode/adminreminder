@@ -8,6 +8,7 @@ import { TopNav } from "./top-nav";
 import { getSetting, getThresholds } from "@/lib/settings";
 import { computeStats } from "@/lib/dashboard-stats";
 import { getT } from "@/lib/i18n/server";
+import pkg from "@/package.json";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,9 @@ export default async function DashboardPage() {
       <footer className="shrink-0 w-full px-6 py-3 border-t border-border text-xs text-muted-foreground">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-1">
           <span>{t("footer.autoCheck")}</span>
-          <span className="whitespace-nowrap">{t("footer.rights")}</span>
+          <span className="whitespace-nowrap">
+            {t("footer.rights")} · {t("footer.version", { version: pkg.version })}
+          </span>
         </div>
       </footer>
     </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runChecks } from "@/lib/check";
+import { syncAllDirectoriesNow } from "@/lib/directory-sync";
 import { sendNotifications } from "@/lib/notify";
 import { sendAdAccountNotifications } from "@/lib/ad/notify-accounts";
 
@@ -22,6 +23,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // An external cron hitting this endpoint means "do everything now" — same
+    // as the manual "run now" button, it force-syncs every directory rather
+    // than waiting for each one's own syncCron (that cadence is only honoured
+    // by the in-app scheduler's autonomous tick, see lib/scheduler.ts).
+    await syncAllDirectoriesNow();
     const checkResult = await runChecks();
     const notifyResult = await sendNotifications();
     const adResult = await sendAdAccountNotifications();

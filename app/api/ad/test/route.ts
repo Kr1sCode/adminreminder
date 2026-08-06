@@ -4,8 +4,13 @@ import { getAdConfig } from "@/lib/ad/resolve";
 import { adSecurityWarnings, AdConfigError } from "@/lib/ad/config";
 import { withServiceBind, searchPaged } from "@/lib/ad/client";
 import { recordAdHealth } from "@/lib/ad/health";
+import { getPrimaryAdDirectory } from "@/lib/directories";
 
 /**
+ * Tests the PRIMARY AD only (the one AdminReminder itself logs into) — kept
+ * for backward compatibility; per-directory testing for client directories
+ * lives at /api/directories/[id]/test.
+ *
  * Binds with the service account and counts user objects, without writing
  * anything. Lets an admin validate the settings before running a full sync.
  */
@@ -27,12 +32,14 @@ export async function POST() {
     return NextResponse.json({ error: "Uzupełnij adres serwera, konto serwisowe i Base DN." }, { status: 400 });
   }
 
+  const primary = await getPrimaryAdDirectory();
+
   try {
     const entries = await withServiceBind(config, (client) =>
       searchPaged(client, config.baseDn, "(&(objectCategory=person)(objectClass=user))", ["sAMAccountName"])
     );
 
-    await recordAdHealth("ok", "Połączono z kontrolerem domeny.");
+    if (primary) await recordAdHealth(primary.id, "ok", "Połączono z kontrolerem domeny.");
     return NextResponse.json({
       success: true,
       accountsFound: entries.length,
@@ -42,7 +49,7 @@ export async function POST() {
   } catch (e: any) {
     console.error("AD test error:", e);
     const message = e.message || "Nie udało się połączyć z kontrolerem domeny";
-    await recordAdHealth("error", message);
+    if (primary) await recordAdHealth(primary.id, "error", message);
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

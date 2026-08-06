@@ -3,6 +3,7 @@ import { TopNav } from "../top-nav";
 import { AdClient, AD_FOOTER_SLOT_ID } from "./ad-client";
 import { getAdThresholds } from "@/lib/settings";
 import { getT } from "@/lib/i18n/server";
+import pkg from "@/package.json";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,9 @@ export default async function AdDirectoryPage() {
               client's state, and a line of its own above the footer would double
               the height of the page's bottom edge. */}
           <span id={AD_FOOTER_SLOT_ID} className="min-w-0 truncate" />
-          <span className="whitespace-nowrap">{t("footer.rights")}</span>
+          <span className="whitespace-nowrap">
+            {t("footer.rights")} · {t("footer.version", { version: pkg.version })}
+          </span>
         </div>
       </footer>
     </div>

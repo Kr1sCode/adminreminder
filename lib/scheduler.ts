@@ -13,6 +13,8 @@ import { runChecks } from "./check";
 import { sendNotifications } from "./notify";
 import { sendAdAccountNotifications } from "./ad/notify-accounts";
 import { refreshAdHealthIfStale } from "./ad/health";
+import { listDirectories } from "./directories";
+import { runDirectorySync, syncAllDirectoriesNow } from "./directory-sync";
 
 export interface CronFields {
   minute: Set<number>;
@@ -125,6 +127,12 @@ export async function runScheduledJob(source: "cron" | "manual"): Promise<{ ok: 
   jobRunning = true;
   const started = new Date();
   try {
+    if (source === "manual") {
+      // A human clicking "uruchom teraz" means right now, for everything —
+      // unlike the autonomous cron tick, which leaves each directory to its
+      // own independent cadence (see tickDirectories below).
+      await syncAllDirectoriesNow();
+    }
     const checks = await runChecks();
     const notify = await sendNotifications();
     // Directory alerts ride the same run: the accounts are refreshed by their own
@@ -147,6 +155,53 @@ export async function runScheduledJob(source: "cron" | "manual"): Promise<{ ok: 
   }
 }
 
+// ── Per-directory sync cadence ──────────────────────────────────────────────
+// Independent of the core loop below: a directory with no syncCron of its own
+// inherits automation_cron (so the common case — no overrides — behaves
+// exactly like before, just synced here instead of inside runChecks()), but
+// one with an override fires on its OWN schedule, decoupled from everyone
+// else's. Same catch-up-window approach as the core loop, tracked per
+// directory id rather than as a single process-wide lastTick.
+const directoryLastTick = new Map<number, number>();
+
+async function tickDirectories(now: number) {
+  const enabled = (await getSetting("automation_enabled", "false")) === "true";
+  if (!enabled) return;
+
+  const globalCron = (await getSetting("automation_cron", DEFAULT_CRON)) || DEFAULT_CRON;
+  const dirs = await listDirectories();
+
+  for (const dir of dirs) {
+    if (!dir.enabled) {
+      directoryLastTick.delete(dir.id);
+      continue;
+    }
+
+    let fields: CronFields;
+    try {
+      fields = parseCron(dir.syncCron || globalCron);
+    } catch {
+      continue; // bad per-directory expression: never fire, same policy as the core loop
+    }
+
+    const last = directoryLastTick.get(dir.id) ?? now;
+    const from = Math.max(last, now - CATCHUP_MS);
+    const cur = new Date(from);
+    cur.setSeconds(0, 0);
+    cur.setMinutes(cur.getMinutes() + 1);
+    let fire = false;
+    while (cur.getTime() <= now) {
+      if (matches(fields, cur)) {
+        fire = true;
+        break;
+      }
+      cur.setMinutes(cur.getMinutes() + 1);
+    }
+    directoryLastTick.set(dir.id, now);
+    if (fire) await runDirectorySync(dir);
+  }
+}
+
 // ── The loop ────────────────────────────────────────────────────────────────
 let started = false;
 let lastTick = 0;
@@ -154,10 +209,12 @@ const TICK_MS = 30_000;
 const CATCHUP_MS = 90 * 60_000; // after a pause/downtime, look back at most 90 min
 
 async function tick() {
-  // Runs every tick regardless of the "automation_enabled" toggle below: the
-  // AD watchdog light is core reliability monitoring, not the opt-in
-  // notification automation, and rate-limits its own actual bind attempts.
+  // Both run every tick regardless of the core "automation_enabled" check
+  // below: the AD watchdog light is core reliability monitoring, and the
+  // per-directory loop has its own (same) enabled gate internally — neither
+  // should wait on the core loop's early return for a bad/missing cron.
   refreshAdHealthIfStale().catch((e) => console.error("[AR] AD health tick error:", e));
+  tickDirectories(Date.now()).catch((e) => console.error("[AR] Directory sync tick error:", e));
 
   try {
     const enabled = (await getSetting("automation_enabled", "false")) === "true";
