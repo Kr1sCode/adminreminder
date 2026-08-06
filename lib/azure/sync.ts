@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
-import { services } from "@/db/schema";
+import { services, directories as directoriesTable } from "@/db/schema";
 import { computeStatus } from "@/lib/cert-checker";
 import { getThresholds } from "@/lib/settings";
 import { eq } from "drizzle-orm";
 import {
-  getAzureConfig,
+  getAzureConfigById,
+  listEntraDirectories,
   listApplications,
   listServicePrincipals,
   type GraphCredential,
@@ -69,17 +70,29 @@ export interface SyncResult {
 }
 
 /**
- * Pulls every app registration and service principal credential from the tenant
- * and mirrors them into the services table. Rows created by a previous run whose
- * credential no longer exists in Entra ID are deleted; rows added by hand in the
- * UI are left alone.
+ * Pulls every app registration and service principal credential from one
+ * tenant and mirrors them into the services table. Rows created by a previous
+ * run whose credential no longer exists in Entra ID are deleted; rows added by
+ * hand in the UI are left alone.
+ *
+ * Matching is by syncKey (source:keyId) across ALL tenants, not scoped by
+ * directoryId — a Graph keyId is a GUID, collision across two different
+ * tenants is not a realistic risk, unlike OU distinguishedNames. directoryId
+ * is still stamped on every row so the UI can attribute it to a tenant.
  */
-export async function syncAzureCredentials(): Promise<SyncResult> {
-  const config = await getAzureConfig();
+export async function syncAzureCredentials(directoryId: number): Promise<SyncResult> {
+  const [directory] = await db
+    .select()
+    .from(directoriesTable)
+    .where(eq(directoriesTable.id, directoryId))
+    .limit(1);
+  if (!directory || directory.type !== "entra") {
+    throw new Error(`Katalog ${directoryId} nie istnieje albo nie jest typu Entra ID.`);
+  }
+
+  const config = await getAzureConfigById(directoryId);
   if (!config) {
-    throw new Error(
-      "Integracja z Azure nie jest skonfigurowana. Uzupełnij dane w Ustawieniach → Entra ID, albo ustaw AZURE_TENANT_ID, AZURE_CLIENT_ID i AZURE_CLIENT_SECRET."
-    );
+    throw new Error(`Integracja z Entra ID „${directory.label}” nie jest skonfigurowana poprawnie.`);
   }
 
   const { expiringSoonDays } = await getThresholds();
@@ -120,6 +133,7 @@ export async function syncAzureCredentials(): Promise<SyncResult> {
           identifier: cred.identifier,
           expiryDate: cred.expiryDate,
           customData: cred.customData,
+          directoryId,
           lastCheckedAt: now,
           lastCheckStatus: status,
           lastCheckError: null,
@@ -134,6 +148,7 @@ export async function syncAzureCredentials(): Promise<SyncResult> {
         identifier: cred.identifier,
         expiryDate: cred.expiryDate,
         customData: cred.customData,
+        directoryId,
         lastCheckedAt: now,
         lastCheckStatus: status,
       });
@@ -152,4 +167,30 @@ export async function syncAzureCredentials(): Promise<SyncResult> {
   }
 
   return { created, updated, removed, scanned };
+}
+
+export interface AzureCredentialSyncOutcome {
+  directoryId: number;
+  label: string;
+  result?: SyncResult;
+  error?: string;
+}
+
+/** Syncs Azure app-registration credentials for every enabled Entra directory. */
+export async function syncAllAzureCredentials(): Promise<AzureCredentialSyncOutcome[]> {
+  const dirs = await listEntraDirectories();
+  const outcomes: AzureCredentialSyncOutcome[] = [];
+  for (const dir of dirs) {
+    try {
+      const result = await syncAzureCredentials(dir.id);
+      outcomes.push({ directoryId: dir.id, label: dir.label, result });
+    } catch (e) {
+      outcomes.push({
+        directoryId: dir.id,
+        label: dir.label,
+        error: e instanceof Error ? e.message : "błąd synchronizacji",
+      });
+    }
+  }
+  return outcomes;
 }

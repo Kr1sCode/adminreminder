@@ -17,6 +17,7 @@ import {
 import { format } from "date-fns";
 import { useEffect } from "react";
 import { useT, useI18n } from "@/components/i18n-provider";
+import { DirectoriesPanel } from "./directories-panel";
 
 /** Mirrors isMasked() in lib/settings.ts: echoing an all-mask-char value back means "unchanged". */
 const MASK_CHAR = "•";
@@ -583,8 +584,6 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
     }
   }
 
-  const adInsecure = get("ad_url").startsWith("ldap://") && get("ad_start_tls") !== "true";
-
   return (
     <>
       <Tabs value={tab} onValueChange={setTab}>
@@ -755,55 +754,8 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
               <CardTitle>{t("set.entra.title")}</CardTitle>
               <CardDescription>{t("set.entra.desc")}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label>Tenant ID</Label>
-                  <Input value={get("azure_tenant_id")} onChange={(e) => set("azure_tenant_id", e.target.value)}
-                    placeholder="00000000-0000-0000-0000-000000000000" className="mt-2 font-mono" />
-                </div>
-                <div>
-                  <Label>{t("set.entra.clientIdLabel")}</Label>
-                  <Input value={get("azure_client_id")} onChange={(e) => set("azure_client_id", e.target.value)}
-                    placeholder="00000000-0000-0000-0000-000000000000" className="mt-2 font-mono" />
-                </div>
-                <div className="md:col-span-2">
-                  <Label>Client Secret</Label>
-                  <SecretInput k="azure_client_secret" get={get} set={set} t={t} />
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
-                <AlertTriangle className="h-4 w-4 inline mr-1.5 text-amber-500" />
-                {t("set.entra.secretWarn")}
-              </div>
-
-              <div className="flex flex-wrap gap-3 pt-2">
-                <Button onClick={() => saveSettings()} disabled={saving} className="bg-emerald-500 hover:bg-emerald-600 text-black">
-                  <Save className="h-4 w-4 mr-2" />
-                  {saving ? t("set.saving") : t("set.entra.saveConnect")}
-                </Button>
-                <Button variant="outline" className="border-border" disabled={busy !== null}
-                  onClick={() => runAction("azure-sync", "/api/azure/sync",
-                    (d) => t("set.entra.syncSecretsResult", { created: d.created, updated: d.updated, removed: d.removed, scanned: d.scanned }))}>
-                  {busy === "azure-sync" ? t("set.syncing") : t("set.entra.syncSecrets")}
-                </Button>
-                <Button variant="outline" className="border-border" disabled={busy !== null}
-                  onClick={() => runAction("entra-sync", "/api/entra/sync",
-                    (d) => t("set.entra.syncAccountsResult", { created: d.created, updated: d.updated, removed: d.removed, technical: d.technical, functional: d.functional }))}>
-                  {busy === "entra-sync" ? t("set.syncing") : t("set.entra.syncAccounts")}
-                </Button>
-              </div>
-
-              {feedback && (
-                <div className={`text-sm ${feedback.kind === "ok" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                  {feedback.text}
-                </div>
-              )}
-
-              <div className="text-xs text-muted-foreground border-t border-border pt-4">
-                {t("set.entra.footer")}
-              </div>
+            <CardContent>
+              <DirectoriesPanel type="entra" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -815,192 +767,8 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
               <CardTitle>{t("set.ad.connTitle")}</CardTitle>
               <CardDescription>{t("set.ad.connDesc")}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label>{t("set.ad.serverLabel")}</Label>
-                  <Input value={get("ad_url")} onChange={(e) => set("ad_url", e.target.value)}
-                    placeholder="ldaps://dc01.corp.local:636" className="mt-2 font-mono" />
-                  <p className="text-xs text-muted-foreground mt-1">{t("set.ad.serverHint")}</p>
-                </div>
-                <div>
-                  <Label>Base DN</Label>
-                  <Input value={get("ad_base_dn")} onChange={(e) => set("ad_base_dn", e.target.value)}
-                    placeholder="DC=corp,DC=local" className="mt-2 font-mono" />
-                </div>
-                <div>
-                  <Label>{t("set.ad.bindDnLabel")}</Label>
-                  <Input value={get("ad_bind_dn")} onChange={(e) => set("ad_bind_dn", e.target.value)}
-                    placeholder="CN=svc-ar,OU=Service Accounts,DC=corp,DC=local" className="mt-2 font-mono" />
-                </div>
-                <div>
-                  <Label>{t("set.ad.bindPassLabel")}</Label>
-                  <SecretInput k="ad_bind_password" get={get} set={set} t={t} />
-                </div>
-              </div>
-
-              <div className="space-y-3 border-t border-border pt-4">
-                <div className="text-sm font-medium">{t("set.ad.encryption")}</div>
-                <Checkbox k="ad_start_tls" label={t("set.ad.startTls")} get={get} set={set} />
-                <Checkbox k="ad_allow_insecure" label={t("set.ad.allowInsecure")} get={get} set={set} />
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox"
-                    checked={get("ad_tls_reject_unauthorized", "true") !== "false"}
-                    onChange={(e) => set("ad_tls_reject_unauthorized", e.target.checked ? "true" : "false")}
-                    className="h-4 w-4 accent-emerald-500" />
-                  <span className="text-sm">{t("set.ad.verifyCert")}</span>
-                </label>
-                <div>
-                  <Label>{t("set.ad.caPathLabel")}</Label>
-                  <Input value={get("ad_ca_cert_path")} onChange={(e) => set("ad_ca_cert_path", e.target.value)}
-                    placeholder="/etc/ssl/certs/corp-ca.pem" className="mt-2 font-mono" />
-                  <p className="text-xs text-muted-foreground mt-1">{t("set.ad.caPathHint")}</p>
-                </div>
-
-                {adInsecure && get("ad_allow_insecure") !== "true" && (
-                  <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-xs text-red-600 dark:text-red-400">
-                    <AlertTriangle className="h-4 w-4 inline mr-1.5" />
-                    {t("set.ad.insecureError")}
-                  </div>
-                )}
-                {adInsecure && get("ad_allow_insecure") === "true" && (
-                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-600 dark:text-amber-400">
-                    <AlertTriangle className="h-4 w-4 inline mr-1.5" />
-                    {t("set.ad.insecureWarn")}
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-wrap gap-3 pt-2">
-                <Button onClick={() => saveSettings()} disabled={saving} className="bg-emerald-500 hover:bg-emerald-600 text-black">
-                  <Save className="h-4 w-4 mr-2" />
-                  {saving ? t("set.saving") : t("set.save")}
-                </Button>
-                <Button variant="outline" className="border-border" disabled={busy !== null}
-                  onClick={async () => {
-                    await runAction("ad-test", "/api/ad/test",
-                      (d) => t("set.ad.testResult", { accountsFound: d.accountsFound, warnings: d.warnings?.length ? " " + t("set.ad.warningsPrefix") + " " + d.warnings.join(" ") : "" }));
-                    loadAdHealth();
-                  }}>
-                  {busy === "ad-test" ? t("set.ad.connecting") : t("set.ad.testConn")}
-                </Button>
-                <Button variant="outline" className="border-border" disabled={busy !== null}
-                  onClick={async () => {
-                    await runAction("ad-sync", "/api/ad/sync",
-                      (d) => t("set.ad.syncResult", { created: d.created, updated: d.updated, removed: d.removed, technical: d.technical, functional: d.functional }));
-                    loadAdHealth();
-                  }}>
-                  {busy === "ad-sync" ? t("set.syncing") : t("set.ad.syncAccounts")}
-                </Button>
-              </div>
-
-              {adHealth && (
-                <div className={`flex items-center gap-2 text-xs rounded-lg border p-2.5 ${
-                  adHealth.status === "ok"
-                    ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400"
-                    : "border-red-500/30 bg-red-500/5 text-red-600 dark:text-red-400"
-                }`}>
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${adHealth.status === "ok" ? "bg-emerald-500" : "bg-red-500 animate-pulse"}`} />
-                  <span className="flex-1">
-                    {adHealth.status === "ok" ? t("set.ad.healthOk") : t("set.ad.healthError", { message: adHealth.message })}
-                  </span>
-                  <span className="text-muted-foreground shrink-0">
-                    {t("set.ad.healthCheckedAt", { time: new Date(adHealth.checkedAt).toLocaleTimeString(locale) })}
-                  </span>
-                </div>
-              )}
-
-              {feedback && (
-                <div className={`text-sm ${feedback.kind === "ok" ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                  {feedback.text}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <CardTitle>{t("set.ad.loginTitle")}</CardTitle>
-              <CardDescription>{t("set.ad.loginDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label>{t("set.ad.adminGroup")}</Label>
-                  <Input value={get("ad_admin_group_dn")} onChange={(e) => set("ad_admin_group_dn", e.target.value)}
-                    placeholder="CN=AR-Admins,OU=Groups,DC=corp,DC=local" className="mt-2 font-mono" />
-                </div>
-                <div>
-                  <Label>{t("set.ad.viewerGroup")}</Label>
-                  <Input value={get("ad_viewer_group_dn")} onChange={(e) => set("ad_viewer_group_dn", e.target.value)}
-                    placeholder="CN=AR-Viewers,OU=Groups,DC=corp,DC=local" className="mt-2 font-mono" />
-                </div>
-              </div>
-              <SaveBar saving={saving} feedback={feedback} onSave={() => saveSettings()} t={t} />
-            </CardContent>
-          </Card>
-
-          {/* The directory's two clocks are configured apart: a password expires
-              every few weeks and the user resets it; an account expires once, on
-              the day a contract ends, and someone else has to act on it. */}
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <CardTitle>{t("set.ad.notifTitle")}</CardTitle>
-              <CardDescription>{t("set.ad.notifDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label>{t("set.ad.pwDays")}</Label>
-                  <Input value={get("ad_password_days", "3,7,14")}
-                    onChange={(e) => set("ad_password_days", e.target.value)}
-                    placeholder="3,7,14" className="mt-2 font-mono" />
-                  <p className="text-xs text-muted-foreground mt-1">{t("set.ad.pwDaysHint")}</p>
-                </div>
-                <div>
-                  <Label>{t("set.ad.acctDays")}</Label>
-                  <Input value={get("ad_account_days", "7,14,30")}
-                    onChange={(e) => set("ad_account_days", e.target.value)}
-                    placeholder="7,14,30" className="mt-2 font-mono" />
-                  <p className="text-xs text-muted-foreground mt-1">{t("set.ad.acctDaysHint")}</p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">{t("set.ad.notifFooter")}</p>
-              <SaveBar label={t("set.ad.saveNotif")} saving={saving} feedback={feedback} onSave={() => saveSettings()} t={t} />
-            </CardContent>
-          </Card>
-
-          <Card className="border-border bg-card">
-            <CardHeader>
-              <CardTitle>{t("set.ad.classTitle")}</CardTitle>
-              <CardDescription>{t("set.ad.classDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label>{t("set.ad.techOu")}</Label>
-                  <Input value={get("ad_technical_ous")} onChange={(e) => set("ad_technical_ous", e.target.value)}
-                    placeholder="OU=Service Accounts,DC=corp,DC=local" className="mt-2 font-mono" />
-                  <p className="text-xs text-muted-foreground mt-1">{t("set.ad.techOuHint")}</p>
-                </div>
-                <div>
-                  <Label>{t("set.ad.techPatterns")}</Label>
-                  <Input value={get("ad_technical_patterns", "svc-*,svc_*,sa-*,sa_*,srv-*")}
-                    onChange={(e) => set("ad_technical_patterns", e.target.value)} className="mt-2 font-mono" />
-                </div>
-                <div>
-                  <Label>{t("set.ad.funcOu")}</Label>
-                  <Input value={get("ad_functional_ous")} onChange={(e) => set("ad_functional_ous", e.target.value)}
-                    placeholder="OU=Shared,DC=corp,DC=local" className="mt-2 font-mono" />
-                </div>
-                <div>
-                  <Label>{t("set.ad.funcPatterns")}</Label>
-                  <Input value={get("ad_functional_patterns", "func-*,role-*")}
-                    onChange={(e) => set("ad_functional_patterns", e.target.value)} className="mt-2 font-mono" />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">{t("set.ad.classFooter")}</p>
-              <SaveBar label={t("set.ad.saveRules")} saving={saving} feedback={feedback} onSave={() => saveSettings()} t={t} />
+            <CardContent>
+              <DirectoriesPanel type="ad" />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1176,38 +944,34 @@ export function SettingsClient({ initialSettings, initialUsers, currentAdminId }
                             </Badge>
                           </td>
                           <td className="py-2.5 px-4">
-                            {u.authSource === "ad" ? (
-                              <span className="text-xs text-muted-foreground">— (AD/Entra)</span>
-                            ) : (
-                              <div className="flex items-center gap-2 flex-wrap">
-                                {u.mfaEnabled ? (
-                                  <Badge variant="outline" className="border-emerald-600 text-emerald-500 dark:text-emerald-400 text-xs">{t("set.users.mfaActive")}</Badge>
-                                ) : u.mfaRequired ? (
-                                  <Badge variant="outline" className="border-amber-600 text-amber-500 dark:text-amber-400 text-xs">{t("set.users.mfaRequired")}</Badge>
-                                ) : (
-                                  <Badge variant="outline" className="text-xs text-muted-foreground">{t("set.users.mfaDisabled")}</Badge>
-                                )}
-                                <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={!!u.mfaRequired}
-                                    onChange={(e) => toggleMfaRequired(u, e.target.checked)}
-                                    className="h-3.5 w-3.5 accent-emerald-500"
-                                  />
-                                  {t("set.users.mfaRequire")}
-                                </label>
-                                {u.id === currentAdminId && !u.mfaEnabled && (
-                                  <Button variant="outline" size="sm" className="h-6 text-xs border-border" onClick={startSelfMfa} disabled={mfaBusy}>
-                                    {t("set.users.mfaConfigure")}
-                                  </Button>
-                                )}
-                                {u.mfaEnabled && (
-                                  <Button variant="ghost" size="sm" className="h-6 text-xs text-amber-500 hover:text-amber-400" onClick={() => resetUserMfa(u)}>
-                                    {t("set.users.mfaReset")}
-                                  </Button>
-                                )}
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {u.mfaEnabled ? (
+                                <Badge variant="outline" className="border-emerald-600 text-emerald-500 dark:text-emerald-400 text-xs">{t("set.users.mfaActive")}</Badge>
+                              ) : u.mfaRequired ? (
+                                <Badge variant="outline" className="border-amber-600 text-amber-500 dark:text-amber-400 text-xs">{t("set.users.mfaRequired")}</Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-xs text-muted-foreground">{t("set.users.mfaDisabled")}</Badge>
+                              )}
+                              <label className="flex items-center gap-1 text-xs text-muted-foreground cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={!!u.mfaRequired}
+                                  onChange={(e) => toggleMfaRequired(u, e.target.checked)}
+                                  className="h-3.5 w-3.5 accent-emerald-500"
+                                />
+                                {t("set.users.mfaRequire")}
+                              </label>
+                              {u.id === currentAdminId && !u.mfaEnabled && (
+                                <Button variant="outline" size="sm" className="h-6 text-xs border-border" onClick={startSelfMfa} disabled={mfaBusy}>
+                                  {t("set.users.mfaConfigure")}
+                                </Button>
+                              )}
+                              {u.mfaEnabled && (
+                                <Button variant="ghost" size="sm" className="h-6 text-xs text-amber-500 hover:text-amber-400" onClick={() => resetUserMfa(u)}>
+                                  {t("set.users.mfaReset")}
+                                </Button>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-4 text-xs text-muted-foreground">
                             {format(new Date(u.createdAt), "dd.MM.yyyy")}

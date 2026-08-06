@@ -1,10 +1,10 @@
 import { X509Certificate } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { services } from "@/db/schema";
+import { services, directories as directoriesTable } from "@/db/schema";
 import { getThresholds } from "@/lib/settings";
 import { computeStatus, CertCheckError } from "@/lib/cert-checker";
-import { getAdConfig } from "./resolve";
+import { getAdConfigById } from "./resolve";
 import { AdError, withServiceBind, searchPaged, first, asBufferArray } from "./client";
 import type { AdConfig } from "./config";
 import type { Client } from "ldapts";
@@ -280,12 +280,29 @@ export interface AdcsSyncResult {
  * longer exist. A hand-added row (customData.managed !== "sync") is never
  * touched by the removal pass — it might point at a CA in another forest that
  * this discovery pass cannot see at all.
+ *
+ * Scoped to one directory: the lookup only ever compares against THIS
+ * forest's previously-synced rows, so client A's sync never touches or
+ * deletes client B's CA rows. Two different forests whose CA distinguishedName
+ * happens to collide (same generic domain suffix, e.g. both "DC=corp,DC=local")
+ * is a known, narrow edge case left unhandled — the second forest's insert
+ * would hit services' (type, identifier, port) unique index and surface as a
+ * per-directory sync error rather than corrupt either forest's data.
  */
-export async function syncAdcsCertificates(): Promise<AdcsSyncResult> {
-  const config = await getAdConfig();
+export async function syncAdcsCertificates(directoryId: number): Promise<AdcsSyncResult> {
+  const [directory] = await db
+    .select()
+    .from(directoriesTable)
+    .where(eq(directoriesTable.id, directoryId))
+    .limit(1);
+  if (!directory || directory.type !== "ad") {
+    throw new AdError(`Katalog ${directoryId} nie istnieje albo nie jest typu AD.`);
+  }
+
+  const config = await getAdConfigById(directoryId);
   if (!config) {
     throw new AdError(
-      "Integracja z Active Directory nie jest skonfigurowana. Uzupełnij dane w Ustawieniach → Active Directory."
+      `Integracja z Active Directory „${directory.label}” nie jest skonfigurowana poprawnie.`
     );
   }
 
@@ -293,7 +310,10 @@ export async function syncAdcsCertificates(): Promise<AdcsSyncResult> {
   const now = new Date();
   const found = await discoverAdcsCertificates(config);
 
-  const existing = await db.select().from(services).where(eq(services.type, "adcs"));
+  const existing = await db
+    .select()
+    .from(services)
+    .where(and(eq(services.type, "adcs"), eq(services.directoryId, directoryId)));
   const byDn = new Map(existing.map((row) => [row.identifier, row]));
 
   const seen = new Set<string>();
@@ -315,6 +335,7 @@ export async function syncAdcsCertificates(): Promise<AdcsSyncResult> {
       type: "adcs" as const,
       name: cert.cn,
       identifier,
+      directoryId,
       customData: {
         role: roleLabel(cert),
         container: cert.container,

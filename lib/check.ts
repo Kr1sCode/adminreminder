@@ -2,44 +2,19 @@ import { db } from "./db";
 import { services } from "@/db/schema";
 import { isAutoCheckable } from "./server/expiry";
 import { refreshService } from "./server/refresh";
-import { isAzureConfigured } from "./azure/graph";
-import { syncAzureCredentials } from "./azure/sync";
-import { syncEntraUsers } from "./azure/users-sync";
-import { isAdConfigured } from "./ad/resolve";
-import { syncAdAccounts } from "./ad/sync";
-import { syncAdcsCertificates } from "./ad/adcs";
 
-/** Runs an optional sync, capturing rather than throwing so one failure does
- *  not abort the others or the certificate checks. */
-async function runOptional<T>(
-  enabled: boolean,
-  label: string,
-  fn: () => Promise<T>
-): Promise<{ result: T | null; error: string | null }> {
-  if (!enabled) return { result: null, error: null };
-  try {
-    return { result: await fn(), error: null };
-  } catch (err: any) {
-    console.error(`${label} sync failed during runChecks:`, err);
-    return { result: null, error: err.message || String(err) };
-  }
-}
-
+/**
+ * Checks the core inventory (certs, domains, warranties, ...). Directory sync
+ * (AD/Entra accounts, AD CS, Azure app-registration credentials) used to run
+ * unconditionally at the top of this function, back when there was only ever
+ * one AD and one Entra tenant to sync. Now that a deployment can have many —
+ * each wanting its own cadence — that fan-out lives in lib/directory-sync.ts
+ * and lib/scheduler.ts's per-directory loop instead; forcing every directory
+ * to sync every time this function runs would defeat a directory's own
+ * syncCron override. "Sync everything right now" (manual button, external
+ * cron) calls lib/directory-sync.ts's syncAllDirectoriesNow() alongside this.
+ */
 export async function runChecks() {
-  // Directory syncs run first and write fresh expiry dates for their own rows.
-  const azureConfigured = await isAzureConfigured();
-  const adConfigured = await isAdConfigured();
-
-  const azureSync = await runOptional(azureConfigured, "Azure credentials", syncAzureCredentials);
-  const entraSync = await runOptional(azureConfigured, "Entra users", syncEntraUsers);
-  const adSync = await runOptional(adConfigured, "Active Directory", syncAdAccounts);
-  // Discovers Root/Issuing CA certificates straight from AD's Configuration NC.
-  // Silently a no-op where no AD CS was ever installed (see lib/ad/adcs.ts).
-  const adcsSync = await runOptional(adConfigured, "AD CS", syncAdcsCertificates);
-
-  const azure = azureSync.result;
-  const azureError = azureSync.error;
-
   const allItems = await db.select().from(services);
 
   let checked = 0;
@@ -59,17 +34,5 @@ export async function runChecks() {
     else checked++;
   }
 
-  return {
-    checked,
-    errors,
-    skipped,
-    azure,
-    azureError,
-    entra: entraSync.result,
-    entraError: entraSync.error,
-    ad: adSync.result,
-    adError: adSync.error,
-    adcs: adcsSync.result,
-    adcsError: adcsSync.error,
-  };
+  return { checked, errors, skipped };
 }

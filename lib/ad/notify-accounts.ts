@@ -80,7 +80,12 @@ export async function sendAdAccountNotifications() {
     return { success: true, sent: 0, message: "Żadne OU ani konto nie ma włączonych powiadomień" };
   }
 
-  const index = indexPolicies(policies);
+  // Orphaned rows (directory deleted without cascading, or predating the
+  // backfill) resolve to nothing rather than crash the whole run.
+  const scopedPolicies = policies.filter(
+    (p): p is typeof p & { directoryId: number } => p.directoryId != null
+  );
+  const index = indexPolicies(scopedPolicies);
   const accounts = await db.select().from(adAccounts);
 
   const now = new Date();
@@ -91,8 +96,13 @@ export async function sendAdAccountNotifications() {
   for (const account of accounts) {
     // A disabled account cannot log in, so nothing about its password is urgent.
     if (!account.enabled) continue;
+    // Every account synced by lib/ad/sync.ts / lib/azure/users-sync.ts carries
+    // its directoryId; a row without one is orphaned (its directory was
+    // deleted without cascading, or predates the backfill) and has no policy
+    // to resolve against.
+    if (!account.directoryId) continue;
 
-    const policy = resolvePolicy(account, index, globalDays);
+    const policy = resolvePolicy({ ...account, directoryId: account.directoryId }, index, globalDays);
     if (!policy || !policy.enabled) continue;
     if (policy.mutedUntil && policy.mutedUntil > now) continue;
 

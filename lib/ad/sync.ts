@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
-import { adAccounts } from "@/db/schema";
+import { adAccounts, directories as directoriesTable, type Directory } from "@/db/schema";
 import { getSetting } from "@/lib/settings";
 import { eq } from "drizzle-orm";
-import { getAdConfig } from "./resolve";
+import { getAdConfigById, listAdDirectories } from "./resolve";
 import { AdError, withServiceBind, searchPaged, first, asArray, firstBuffer } from "./client";
 import { filetimeToDate, formatObjectGuid, parentDn, isDisabled, passwordNeverExpires } from "./attrs";
 import { classifyAccount, parseList, type ClassificationRules } from "./classify";
@@ -38,12 +38,14 @@ export interface AdSyncResult {
   users: number;
 }
 
-async function loadRules(): Promise<ClassificationRules> {
+/** Per-directory classification rules, falling back to the global defaults —
+ *  a client whose row leaves these blank still gets sensible classification. */
+async function loadRules(directory: Directory): Promise<ClassificationRules> {
   const [technicalOus, technicalPatterns, functionalOus, functionalPatterns] = await Promise.all([
-    getSetting("ad_technical_ous", ""),
-    getSetting("ad_technical_patterns", "svc-*,svc_*,sa-*,sa_*,srv-*"),
-    getSetting("ad_functional_ous", ""),
-    getSetting("ad_functional_patterns", "func-*,role-*"),
+    directory.technicalOus ?? (await getSetting("ad_technical_ous", "")),
+    directory.technicalPatterns ?? (await getSetting("ad_technical_patterns", "svc-*,svc_*,sa-*,sa_*,srv-*")),
+    directory.functionalOus ?? (await getSetting("ad_functional_ous", "")),
+    directory.functionalPatterns ?? (await getSetting("ad_functional_patterns", "func-*,role-*")),
   ]);
 
   return {
@@ -54,20 +56,27 @@ async function loadRules(): Promise<ClassificationRules> {
   };
 }
 
-export async function syncAdAccounts(): Promise<AdSyncResult> {
-  const config = await getAdConfig();
-  if (!config) {
-    throw new AdError("Integracja z Active Directory nie jest skonfigurowana. Uzupełnij dane w Ustawieniach → Active Directory.");
+export async function syncAdAccounts(directoryId: number): Promise<AdSyncResult> {
+  const [directory] = await db.select().from(directoriesTable).where(eq(directoriesTable.id, directoryId)).limit(1);
+  if (!directory || directory.type !== "ad") {
+    throw new AdError(`Katalog ${directoryId} nie istnieje albo nie jest typu AD.`);
   }
 
-  const rules = await loadRules();
+  const config = await getAdConfigById(directoryId);
+  if (!config) {
+    throw new AdError(
+      `Integracja z Active Directory „${directory.label}” nie jest skonfigurowana poprawnie.`
+    );
+  }
+
+  const rules = await loadRules(directory);
   const now = new Date();
 
   const entries = await withServiceBind(config, (client) =>
     searchPaged(client, config.baseDn, USER_FILTER, ATTRIBUTES, ["objectGUID"])
   );
 
-  const existing = await db.select().from(adAccounts).where(eq(adAccounts.source, "ad"));
+  const existing = await db.select().from(adAccounts).where(eq(adAccounts.directoryId, directoryId));
   const byGuid = new Map(existing.map((row) => [row.objectGuid, row]));
 
   const seen = new Set<string>();
@@ -92,6 +101,7 @@ export async function syncAdAccounts(): Promise<AdSyncResult> {
 
     const values = {
       source: "ad" as const,
+      directoryId,
       objectGuid,
       samAccountName,
       distinguishedName,
@@ -129,4 +139,34 @@ export async function syncAdAccounts(): Promise<AdSyncResult> {
   }
 
   return result;
+}
+
+export interface AdDirectorySyncOutcome {
+  directoryId: number;
+  label: string;
+  result?: AdSyncResult;
+  error?: string;
+}
+
+/**
+ * Syncs every enabled AD directory. One client's DC being unreachable must
+ * never block the others — each directory's failure is caught and reported
+ * individually rather than aborting the whole run.
+ */
+export async function syncAllAdDirectories(): Promise<AdDirectorySyncOutcome[]> {
+  const dirs = await listAdDirectories();
+  const outcomes: AdDirectorySyncOutcome[] = [];
+  for (const dir of dirs) {
+    try {
+      const result = await syncAdAccounts(dir.id);
+      outcomes.push({ directoryId: dir.id, label: dir.label, result });
+    } catch (e) {
+      outcomes.push({
+        directoryId: dir.id,
+        label: dir.label,
+        error: e instanceof Error ? e.message : "błąd synchronizacji",
+      });
+    }
+  }
+  return outcomes;
 }

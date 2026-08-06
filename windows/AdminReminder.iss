@@ -160,6 +160,18 @@ var
   ResultCode: Integer;
   AppDirPath, DataDirPath, Port, Origin: String;
 begin
+  if CurStep = ssInstall then
+  begin
+    // Runs BEFORE [Files] copies anything. On an upgrade the running service
+    // still holds {app}\node.exe open, so overwriting it mid-copy is what
+    // made Setup's progress bar stall on node.exe with an abort/retry prompt.
+    // {app}\nssm.exe only exists here on an upgrade (a fresh install hasn't
+    // copied it yet), which conveniently doubles as the "is this an upgrade"
+    // check without depending on the ssPostInstall-only DetectExistingInstall.
+    if FileExists(ExpandConstant('{app}\nssm.exe')) then
+      NssmExec('stop AdminReminder');
+  end;
+
   if CurStep = ssPostInstall then
   begin
     AppDirPath := ExpandConstant('{app}');
@@ -167,9 +179,9 @@ begin
     Port := ConfigPage.Values[0];
     Origin := ConfigPage.Values[1];
 
-    // Stop before touching any files under DataDirPath: a running service
-    // holds the SQLite file open, and a wipe below must not fight the
-    // service for that lock. Ignored if the service never existed.
+    // Redundant with the ssInstall stop above for the file-lock issue, but
+    // kept as a safety net before the DelTree below (which must not race a
+    // running service for the SQLite file lock either).
     NssmExec('stop AdminReminder');
 
     if WipeRequested then

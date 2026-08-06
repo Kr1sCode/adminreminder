@@ -185,7 +185,7 @@ export function DashboardClient({
   // Signed release check (lib/update-check.ts) — cached server-side, this
   // call is cheap. Dismissal is per-version and purely client-side: a later
   // release re-shows the banner even if an older one was dismissed.
-  const [updateInfo, setUpdateInfo] = useState<{ latestVersion: string; notesUrl: string; canAutoInstall: boolean } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{ latestVersion: string; notesUrl: string; canAutoInstall: boolean; platform: "win32" | "linux" } | null>(null);
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [installError, setInstallError] = useState<string | null>(null);
@@ -195,7 +195,12 @@ export function DashboardClient({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!data?.available) return;
-        setUpdateInfo({ latestVersion: data.latestVersion, notesUrl: data.notesUrl, canAutoInstall: !!data.canAutoInstall });
+        setUpdateInfo({
+          latestVersion: data.latestVersion,
+          notesUrl: data.notesUrl,
+          canAutoInstall: !!data.canAutoInstall,
+          platform: data.platform === "linux" ? "linux" : "win32",
+        });
         setUpdateDismissed(localStorage.getItem("ar_update_dismissed") === data.latestVersion);
       })
       .catch(() => {});
@@ -722,7 +727,9 @@ export function DashboardClient({
             </button>
           </div>
           {installing && (
-            <p className="text-xs text-muted-foreground pl-7">{t("dash.updateInstallingHint")}</p>
+            <p className="text-xs text-muted-foreground pl-7">
+              {updateInfo.platform === "linux" ? t("dash.updateInstallingHintLinux") : t("dash.updateInstallingHint")}
+            </p>
           )}
           {installError && (
             <p className="text-xs text-red-500 dark:text-red-400 pl-7">{installError}</p>

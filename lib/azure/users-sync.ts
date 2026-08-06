@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
-import { adAccounts } from "@/db/schema";
+import { adAccounts, directories as directoriesTable } from "@/db/schema";
 import { getSetting } from "@/lib/settings";
-import { and, eq } from "drizzle-orm";
-import { getAzureConfig, listUsers, listDomains } from "./graph";
+import { eq } from "drizzle-orm";
+import { getAzureConfigById, listEntraDirectories, listUsers, listDomains } from "./graph";
 import { computeEntraPasswordExpiry, buildDomainPolicyMap } from "./password";
 import { classifyAccount, parseList } from "@/lib/ad/classify";
 
@@ -28,18 +28,24 @@ export interface EntraSyncResult {
   users: number;
 }
 
-export async function syncEntraUsers(): Promise<EntraSyncResult> {
-  const config = await getAzureConfig();
-  if (!config) {
-    throw new Error(
-      "Integracja z Entra ID nie jest skonfigurowana. Uzupełnij dane w Ustawieniach → Entra ID."
-    );
+export async function syncEntraUsers(directoryId: number): Promise<EntraSyncResult> {
+  const [directory] = await db
+    .select()
+    .from(directoriesTable)
+    .where(eq(directoriesTable.id, directoryId))
+    .limit(1);
+  if (!directory || directory.type !== "entra") {
+    throw new Error(`Katalog ${directoryId} nie istnieje albo nie jest typu Entra ID.`);
   }
 
-  const [technicalPatterns, functionalPatterns, expiringSoonDaysRaw] = await Promise.all([
-    getSetting("ad_technical_patterns", "svc-*,svc_*,sa-*,sa_*,srv-*"),
-    getSetting("ad_functional_patterns", "func-*,role-*"),
-    getSetting("expiring_soon_days", "30"),
+  const config = await getAzureConfigById(directoryId);
+  if (!config) {
+    throw new Error(`Integracja z Entra ID „${directory.label}” nie jest skonfigurowana poprawnie.`);
+  }
+
+  const [technicalPatterns, functionalPatterns] = await Promise.all([
+    directory.technicalPatterns ?? (await getSetting("ad_technical_patterns", "svc-*,svc_*,sa-*,sa_*,srv-*")),
+    directory.functionalPatterns ?? (await getSetting("ad_functional_patterns", "func-*,role-*")),
   ]);
   const rules = {
     technicalOus: [] as string[],
@@ -47,12 +53,11 @@ export async function syncEntraUsers(): Promise<EntraSyncResult> {
     functionalOus: [] as string[],
     functionalPatterns: parseList(functionalPatterns),
   };
-  const expiringSoonDays = parseInt(expiringSoonDaysRaw || "30", 10);
 
   const domainPolicy = buildDomainPolicyMap(await listDomains(config));
 
   const now = new Date();
-  const existing = await db.select().from(adAccounts).where(eq(adAccounts.source, "entra"));
+  const existing = await db.select().from(adAccounts).where(eq(adAccounts.directoryId, directoryId));
   const byGuid = new Map(existing.map((row) => [row.objectGuid, row]));
   const seen = new Set<string>();
 
@@ -76,6 +81,7 @@ export async function syncEntraUsers(): Promise<EntraSyncResult> {
 
     const values = {
       source: "entra" as const,
+      directoryId,
       objectGuid: user.id,
       samAccountName: login,
       distinguishedName: `CN=${(user.displayName || login).replace(/,/g, "\\,")},${synthPath(user.department)}`,
@@ -106,12 +112,36 @@ export async function syncEntraUsers(): Promise<EntraSyncResult> {
 
   for (const [guid, row] of byGuid) {
     if (!seen.has(guid)) {
-      await db
-        .delete(adAccounts)
-        .where(and(eq(adAccounts.id, row.id), eq(adAccounts.source, "entra")));
+      await db.delete(adAccounts).where(eq(adAccounts.id, row.id));
       result.removed++;
     }
   }
 
   return result;
+}
+
+export interface EntraDirectorySyncOutcome {
+  directoryId: number;
+  label: string;
+  result?: EntraSyncResult;
+  error?: string;
+}
+
+/** Syncs every enabled Entra directory; one tenant's failure never blocks another's. */
+export async function syncAllEntraDirectories(): Promise<EntraDirectorySyncOutcome[]> {
+  const dirs = await listEntraDirectories();
+  const outcomes: EntraDirectorySyncOutcome[] = [];
+  for (const dir of dirs) {
+    try {
+      const result = await syncEntraUsers(dir.id);
+      outcomes.push({ directoryId: dir.id, label: dir.label, result });
+    } catch (e) {
+      outcomes.push({
+        directoryId: dir.id,
+        label: dir.label,
+        error: e instanceof Error ? e.message : "błąd synchronizacji",
+      });
+    }
+  }
+  return outcomes;
 }

@@ -7,7 +7,7 @@ import { getCertificateExpiry, probeTlsEndpoint, normalizeFingerprint, EKU_SERVE
 import { getDomainExpiry } from "./domain";
 import { registrableDomainFor } from "./companion";
 import { isAutoCheckable } from "./expiry";
-import { getAdConfig } from "@/lib/ad/resolve";
+import { getAdConfig, getAdConfigById } from "@/lib/ad/resolve";
 import { probeAdcsCertificateByDn } from "@/lib/ad/adcs";
 
 export interface RefreshResult {
@@ -72,7 +72,11 @@ export async function refreshService(item: Service): Promise<RefreshResult> {
     // identifier is the CA object's DN — no host/port, the certificate lives
     // in AD's Configuration NC, not on any TLS endpoint (see lib/ad/adcs.ts).
     try {
-      const config = await getAdConfig();
+      // A row synced by lib/ad/adcs.ts carries the directory it came from; a
+      // hand-added row (e.g. a CA in a forest with no full sync configured)
+      // has none, and falls back to the primary AD — the only config that
+      // existed before directories were a thing.
+      const config = item.directoryId ? await getAdConfigById(item.directoryId) : await getAdConfig();
       if (!config) {
         throw new Error(
           "Integracja z Active Directory nie jest skonfigurowana. Uzupełnij dane w Ustawieniach → Active Directory."

@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { adAccounts } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { getCurrentUser } from "@/lib/auth";
 import { getThresholds } from "@/lib/settings";
 import { buildOuTree } from "@/lib/ad/tree";
@@ -22,12 +23,20 @@ function side(expiry: Date | null, expiringSoonDays: number, neverExpires = fals
   return { status, daysLeft };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // No param: every directory combined, as it always has been. A specific
+  // directoryId scopes both the table and the OU tree to just that forest —
+  // the tree in particular must never merge two forests' OUs into one.
+  const directoryIdParam = request.nextUrl.searchParams.get("directoryId");
+  const directoryId = directoryIdParam ? parseInt(directoryIdParam, 10) : null;
+
   const { expiringSoonDays } = await getThresholds();
-  const rows = await db.select().from(adAccounts);
+  const rows = directoryId
+    ? await db.select().from(adAccounts).where(eq(adAccounts.directoryId, directoryId))
+    : await db.select().from(adAccounts);
 
   const accounts = rows.map((row) => {
     const password = side(row.passwordExpiresAt, expiringSoonDays, row.passwordNeverExpires);
@@ -54,10 +63,17 @@ export async function GET() {
 
   const attention = (status: string) => status === "expiring" || status === "expired";
 
+  const byDirectory: Record<number, number> = {};
+  for (const r of rows) {
+    if (r.directoryId == null) continue;
+    byDirectory[r.directoryId] = (byDirectory[r.directoryId] ?? 0) + 1;
+  }
+
   const summary = {
     total: rows.length,
     ad: rows.filter((r) => r.source === "ad").length,
     entra: rows.filter((r) => r.source === "entra").length,
+    byDirectory,
     technical: rows.filter((r) => r.kind === "technical").length,
     functional: rows.filter((r) => r.kind === "functional").length,
     disabled: rows.filter((r) => !r.enabled).length,

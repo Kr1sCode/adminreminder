@@ -1,4 +1,5 @@
-import { getSetting, getSecret } from "@/lib/settings";
+import { decryptSecret } from "@/lib/crypto";
+import { getDirectory, listEnabledDirectories } from "@/lib/directories";
 
 const LOGIN_HOST = "https://login.microsoftonline.com";
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
@@ -17,28 +18,38 @@ export interface AzureConfig {
 }
 
 /**
- * Environment variables win over the settings table, so a container can pin its
- * credentials without anyone being able to change them from the web UI.
+ * Entra never authenticates a login to AdminReminder itself (unlike AD, which
+ * has exactly one primary/login directory) — every tenant here is purely for
+ * read-only inventory, so there is no single "the" config anymore, only one
+ * per configured directory.
  */
-export async function getAzureConfig(): Promise<AzureConfig | null> {
-  const tenantId = process.env.AZURE_TENANT_ID || (await getSetting("azure_tenant_id"));
-  const clientId = process.env.AZURE_CLIENT_ID || (await getSetting("azure_client_id"));
-  const clientSecret = process.env.AZURE_CLIENT_SECRET || (await getSecret("azure_client_secret"));
+export async function getAzureConfigById(directoryId: number): Promise<AzureConfig | null> {
+  const row = await getDirectory(directoryId);
+  if (!row || row.type !== "entra") return null;
+  if (!row.tenantId || !row.clientId || !row.clientSecretEnc) return null;
+  return { tenantId: row.tenantId, clientId: row.clientId, clientSecret: decryptSecret(row.clientSecretEnc) };
+}
 
-  if (!tenantId || !clientId || !clientSecret) return null;
-  return { tenantId, clientId, clientSecret };
+export async function listEntraDirectories() {
+  return listEnabledDirectories("entra");
 }
 
 export async function isAzureConfigured(): Promise<boolean> {
-  return (await getAzureConfig()) !== null;
+  return (await listEntraDirectories()).length > 0;
 }
 
-let cachedToken: { value: string; expiresAt: number } | null = null;
+// Keyed by tenant+client: two different tenants must never share a cached
+// token, or a sync for one client's Entra tenant would silently run against
+// another's.
+const tokenCache = new Map<string, { value: string; expiresAt: number }>();
+const tokenCacheKey = (config: AzureConfig) => `${config.tenantId}:${config.clientId}`;
 
 async function getAccessToken(config: AzureConfig): Promise<string> {
+  const key = tokenCacheKey(config);
   // Re-use the token until a minute before it expires.
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
-    return cachedToken.value;
+  const cached = tokenCache.get(key);
+  if (cached && cached.expiresAt > Date.now() + 60_000) {
+    return cached.value;
   }
 
   const res = await fetch(`${LOGIN_HOST}/${config.tenantId}/oauth2/v2.0/token`, {
@@ -61,16 +72,17 @@ async function getAccessToken(config: AzureConfig): Promise<string> {
     );
   }
 
-  cachedToken = {
+  const entry = {
     value: data.access_token,
     expiresAt: Date.now() + Number(data.expires_in ?? 3600) * 1000,
   };
-  return cachedToken.value;
+  tokenCache.set(key, entry);
+  return entry.value;
 }
 
-/** Drops the cached token. Used when Graph rejects it mid-run. */
-export function invalidateTokenCache() {
-  cachedToken = null;
+/** Drops the cached token for one tenant. Used when Graph rejects it mid-run. */
+export function invalidateTokenCache(config: AzureConfig) {
+  tokenCache.delete(tokenCacheKey(config));
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -90,7 +102,7 @@ async function graphFetch(url: string, config: AzureConfig, attempt = 0): Promis
   }
 
   if (res.status === 401 && attempt === 0) {
-    invalidateTokenCache();
+    invalidateTokenCache(config);
     return graphFetch(url, config, attempt + 1);
   }
 

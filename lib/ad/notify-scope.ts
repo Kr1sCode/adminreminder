@@ -26,6 +26,7 @@ import { parseDays } from "@/lib/notify-policy";
 export type AdSide = "password" | "account";
 
 export interface PolicyRow {
+  directoryId: number;
   scope: "ou" | "account";
   target: string;
   enabled: boolean;
@@ -99,28 +100,35 @@ export function ancestorDns(ouPath: string): string[] {
 /** Case-insensitive: AD hands the same DN back with varying case. */
 const norm = (dn: string) => dn.trim().toLowerCase();
 
+/** Every key below is qualified by directoryId: two different client forests
+ *  can and do reuse the same OU naming convention (e.g. both have
+ *  "OU=Service Accounts,DC=corp,DC=local"), and without this a policy meant
+ *  for one would silently also govern the other's identically-named OU. */
+const scopedKey = (directoryId: number, target: string) => `${directoryId}:${norm(target)}`;
+
 export function indexPolicies(rows: PolicyRow[]) {
   const byAccount = new Map<string, PolicyRow>();
   const byOu = new Map<string, PolicyRow>();
 
   for (const row of rows) {
-    if (row.scope === "account") byAccount.set(norm(row.target), row);
-    else byOu.set(norm(row.target), row);
+    const key = scopedKey(row.directoryId, row.target);
+    if (row.scope === "account") byAccount.set(key, row);
+    else byOu.set(key, row);
   }
 
   return { byAccount, byOu };
 }
 
 export function resolvePolicy(
-  account: { source: string; objectGuid: string; ouPath: string },
+  account: { directoryId: number; source: string; objectGuid: string; ouPath: string },
   index: ReturnType<typeof indexPolicies>,
   globalDays: GlobalDays
 ): EffectivePolicy | null {
-  const own = index.byAccount.get(norm(accountKey(account)));
+  const own = index.byAccount.get(scopedKey(account.directoryId, accountKey(account)));
   if (own) return shape(own, "account", globalDays);
 
   for (const dn of ancestorDns(account.ouPath)) {
-    const ou = index.byOu.get(norm(dn));
+    const ou = index.byOu.get(scopedKey(account.directoryId, dn));
     if (ou) return shape(ou, "ou", globalDays);
   }
 

@@ -57,6 +57,13 @@ export interface UpdateInfo {
    *  configured — most Linux deployments don't run the updater sidecar, and
    *  for those this must stay false. */
   canAutoInstall: boolean;
+  /** Which install-progress copy the dashboard shows: the two paths take
+   *  wildly different real time. Windows' /VERYSILENT install finishes in
+   *  seconds; Linux's rebuilds a Docker image first (npm ci + next build)
+   *  before the app container even goes down — several minutes on modest
+   *  hardware (observed ~7 min on a 2 vCPU/2 GB LXC), not the "back in a
+   *  minute" a shared, OS-unaware message would promise. */
+  platform: "win32" | "linux";
 }
 
 function parseVersion(v: string): [number, number, number] | null {
@@ -169,6 +176,7 @@ export async function checkForUpdate(force = false): Promise<UpdateInfo | null> 
     canAutoInstall:
       (isWindows && !!m.installerUrl && !!m.installerSha256) ||
       (hasLinuxUpdater && !!m.sourceUrl && !!m.sourceSha256),
+    platform: isWindows ? "win32" : "linux",
   });
 
   if (!force) {

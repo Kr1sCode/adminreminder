@@ -40,6 +40,7 @@ type Source = "ad" | "entra";
 
 interface Account {
   id: number;
+  directoryId: number;
   source: Source;
   objectGuid: string;
   samAccountName: string;
@@ -74,11 +75,21 @@ interface Policy extends PolicyRow {
 interface PanelTarget {
   scope: "ou" | "account";
   target: string;
+  /** Which forest/tenant this target belongs to — required by PATCH
+   *  /api/ad/notifications now that a target string alone isn't unique
+   *  across directories (two forests can share an OU's exact DN). */
+  directoryId: number;
   item: NotificationTarget;
   /** The password expiry and the account expiry, each with its own thresholds. */
   sides: PanelSide[];
   /** Set for an account, so the panel can name the OU it would inherit from. */
   account?: Account;
+}
+
+interface DirectoryOption {
+  id: number;
+  type: "ad" | "entra";
+  label: string;
 }
 
 /** Own policy, inherited from an OU, or nothing at all. */
@@ -88,6 +99,7 @@ interface Summary {
   total: number;
   ad: number;
   entra: number;
+  byDirectory: Record<number, number>;
   technical: number;
   functional: number;
   disabled: number;
@@ -125,7 +137,8 @@ export function AdClient({
 
   const [selectedOu, setSelectedOu] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<Kind | "all">("all");
-  const [sourceFilter, setSourceFilter] = useState<Source | "all">("all");
+  const [directoryFilter, setDirectoryFilter] = useState<number | "all">("all");
+  const [directories, setDirectories] = useState<DirectoryOption[]>([]);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -166,10 +179,17 @@ export function AdClient({
     setPolicies(data.policies);
   }
 
-  useEffect(() => { load(); loadPolicies(); }, []);
+  async function loadDirectories() {
+    const res = await fetch("/api/directories");
+    if (!res.ok) return;
+    const data = await res.json();
+    setDirectories((data.directories ?? []).map((d: any) => ({ id: d.id, type: d.type, label: d.label })));
+  }
 
-  /** Syncs both directories; a directory that isn't configured is skipped, not
-   *  reported as an error. */
+  useEffect(() => { load(); loadPolicies(); loadDirectories(); }, []);
+
+  /** Syncs every configured AD directory and every Entra tenant; one that isn't
+   *  configured at all is skipped, not reported as an error. */
   async function sync() {
     setSyncing(true);
     setError(null);
@@ -183,7 +203,20 @@ export function AdClient({
         const res = await fetch(url, { method: "POST" });
         const data = await res.json();
         if (res.ok) {
-          parts.push(`${label}: +${data.created} / ~${data.updated} / −${data.removed}`);
+          const ok = (data.outcomes ?? []).filter((o: any) => !o.error);
+          if (ok.length) {
+            const totals = ok.reduce(
+              (acc: any, o: any) => ({
+                created: acc.created + (o.result?.created ?? 0),
+                updated: acc.updated + (o.result?.updated ?? 0),
+                removed: acc.removed + (o.result?.removed ?? 0),
+              }),
+              { created: 0, updated: 0, removed: 0 }
+            );
+            parts.push(`${label}: +${totals.created} / ~${totals.updated} / −${totals.removed}`);
+          }
+          const failed = (data.outcomes ?? []).filter((o: any) => o.error);
+          for (const f of failed) errors.push(`${label} (${f.label}): ${f.error}`);
         } else if (!/nie jest skonfigurowana/i.test(data.error || "")) {
           errors.push(`${label}: ${data.error}`);
         }
@@ -195,6 +228,7 @@ export function AdClient({
     // load() clears the error state, so it has to run before the messages are set —
     // otherwise a failed sync leaves the cached list on screen and looks like a success.
     await load();
+    await loadDirectories();
 
     if (errors.length) setError(errors.join(" · "));
     if (parts.length) setNotice(t("adp.syncedNotice", { parts: parts.join(" · ") }));
@@ -213,15 +247,15 @@ export function AdClient({
 
   const policyIndex = useMemo(() => indexPolicies(policies), [policies]);
 
-  const ownPolicy = (scope: "ou" | "account", target: string) =>
+  const ownPolicy = (scope: "ou" | "account", target: string, directoryId: number) =>
     policies.find(
-      (p) => p.scope === scope && p.target.toLowerCase() === target.toLowerCase()
+      (p) => p.directoryId === directoryId && p.scope === scope && p.target.toLowerCase() === target.toLowerCase()
     ) ?? null;
 
   /** What actually governs this account: its own policy, an OU's, or nothing. */
   const effectiveFor = (a: Account) =>
     resolvePolicy(
-      { source: a.source, objectGuid: a.objectGuid, ouPath: a.ouPath },
+      { directoryId: a.directoryId, source: a.source, objectGuid: a.objectGuid, ouPath: a.ouPath },
       policyIndex,
       globalDays
     );
@@ -230,12 +264,20 @@ export function AdClient({
     !!until && new Date(until) > new Date();
 
   /** The panel is reused, not remounted, so the target object is built once here. */
-  function openPolicy(scope: "ou" | "account", target: string, name: string, identifier: string, account?: Account) {
-    const own = ownPolicy(scope, target);
+  function openPolicy(
+    scope: "ou" | "account",
+    target: string,
+    name: string,
+    identifier: string,
+    directoryId: number,
+    account?: Account
+  ) {
+    const own = ownPolicy(scope, target, directoryId);
     setMode(own ? (own.enabled ? "on" : "off") : "inherit");
     setPanel({
       scope,
       target,
+      directoryId,
       account,
       sides: [
         {
@@ -278,8 +320,9 @@ export function AdClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
         mode === "inherit"
-          ? { scope: panel.scope, target: panel.target, remove: true }
+          ? { directoryId: panel.directoryId, scope: panel.scope, target: panel.target, remove: true }
           : {
+              directoryId: panel.directoryId,
               scope: panel.scope,
               target: panel.target,
               enabled: mode === "on",
@@ -304,7 +347,7 @@ export function AdClient({
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return accounts.filter((a) => {
-      if (sourceFilter !== "all" && a.source !== sourceFilter) return false;
+      if (directoryFilter !== "all" && a.directoryId !== directoryFilter) return false;
       if (selectedOu && a.ouPath !== selectedOu && !a.ouPath.endsWith(`,${selectedOu}`)) return false;
       if (kindFilter !== "all" && a.kind !== kindFilter) return false;
       if (!q) return true;
@@ -314,7 +357,21 @@ export function AdClient({
         (a.userPrincipalName ?? "").toLowerCase().includes(q)
       );
     });
-  }, [accounts, selectedOu, kindFilter, sourceFilter, query]);
+  }, [accounts, selectedOu, kindFilter, directoryFilter, query]);
+
+  /** Every account under this OU (by DN suffix) shares one directory in
+   *  practice — a forest's own DC= suffix makes cross-forest DN collisions on
+   *  a real subtree implausible. Used to attach a directoryId to an OU-scope
+   *  policy action, which the tree itself (merged across every directory)
+   *  doesn't carry per node. */
+  function directoryIdForOu(dn: string): number | null {
+    const needle = dn.toLowerCase();
+    const match = accounts.find((a) => {
+      const ou = a.ouPath.toLowerCase();
+      return ou === needle || ou.endsWith(`,${needle}`);
+    });
+    return match?.directoryId ?? null;
+  }
 
   /** One badge for one clock. `never` only ever applies to a password. */
   function statusBadge(a: Account, status: Status, daysLeft: number | null) {
@@ -331,9 +388,13 @@ export function AdClient({
     return <Badge className="status-ok border">{formatDaysLeft(daysLeft)}</Badge>;
   }
 
-  /** The bell in an OU row: off, on, muted, or explicitly silenced. */
+  /** The bell in an OU row: off, on, muted, or explicitly silenced. Hidden
+   *  (as a plain icon, not a button) when the OU somehow has no accounts to
+   *  derive a directoryId from — shouldn't happen, the tree only shows OUs
+   *  that have some. */
   function ouBell(node: OuNode) {
-    const own = ownPolicy("ou", node.dn);
+    const directoryId = directoryIdForOu(node.dn);
+    const own = directoryId != null ? ownPolicy("ou", node.dn, directoryId) : null;
     const muted = isMuted(own?.mutedUntil);
     const watches = own?.enabled && (own.notifyPassword || own.notifyAccount);
 
@@ -349,10 +410,12 @@ export function AdClient({
           .join(" + ")
       : "";
 
+    if (directoryId == null) return <span className="shrink-0 opacity-40">{icon}</span>;
+
     return (
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); openPolicy("ou", node.dn, node.name, node.dn); }}
+        onClick={(e) => { e.stopPropagation(); openPolicy("ou", node.dn, node.name, node.dn, directoryId); }}
         className="shrink-0 hover:opacity-100"
         title={watches ? `${t("adp.notif.bell")}: ${sides}` : t("adp.notif.bell")}
         aria-label={t("adp.notif.bell")}
@@ -373,7 +436,7 @@ export function AdClient({
 
   /** The bell in an account row. An outline bell means the OU above decides. */
   function accountBell(a: Account) {
-    const own = ownPolicy("account", accountKey(a));
+    const own = ownPolicy("account", accountKey(a), a.directoryId);
     const effective = effectiveFor(a);
     const muted = isMuted(effective?.mutedUntil);
     const active = !!effective?.enabled && (effective.password.enabled || effective.account.enabled);
@@ -396,7 +459,7 @@ export function AdClient({
       <Button
         size="sm"
         variant="ghost"
-        onClick={() => openPolicy("account", accountKey(a), a.displayName || a.samAccountName, a.userPrincipalName || a.samAccountName, a)}
+        onClick={() => openPolicy("account", accountKey(a), a.displayName || a.samAccountName, a.userPrincipalName || a.samAccountName, a.directoryId, a)}
         className="h-8 px-2"
         title={title}
         aria-label={t("adp.notif.bell")}
@@ -526,12 +589,18 @@ export function AdClient({
             placeholder={t("adp.searchPlaceholder")} className="pl-9" />
         </div>
 
-        {summary && summary.ad > 0 && summary.entra > 0 && (
-          <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value as Source | "all")}
-            className="bg-background border border-input rounded-md px-3 py-2 text-sm">
+        {summary && Object.keys(summary.byDirectory).length > 1 && (
+          <select
+            value={directoryFilter === "all" ? "all" : String(directoryFilter)}
+            onChange={(e) => setDirectoryFilter(e.target.value === "all" ? "all" : Number(e.target.value))}
+            className="bg-background border border-input rounded-md px-3 py-2 text-sm"
+          >
             <option value="all">{t("adp.bothDirs")}</option>
-            <option value="ad">Active Directory</option>
-            <option value="entra">Entra ID</option>
+            {directories
+              .filter((d) => summary.byDirectory[d.id] > 0)
+              .map((d) => (
+                <option key={d.id} value={d.id}>{d.label}</option>
+              ))}
           </select>
         )}
 
@@ -609,9 +678,9 @@ export function AdClient({
                     <td className="px-5 py-3">
                       <div className="font-medium flex items-center gap-2">
                         {a.displayName || a.samAccountName}
-                        {a.source === "entra" && (
-                          <span className="text-[10px] uppercase tracking-wide text-sky-500 dark:text-sky-400 border border-sky-500/40 rounded px-1">
-                            Entra
+                        {directories.length > 1 && (
+                          <span className="text-[10px] uppercase tracking-wide text-sky-500 dark:text-sky-400 border border-sky-500/40 rounded px-1 max-w-[10rem] truncate">
+                            {directories.find((d) => d.id === a.directoryId)?.label ?? (a.source === "entra" ? "Entra" : "AD")}
                           </span>
                         )}
                       </div>

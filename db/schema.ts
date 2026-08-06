@@ -65,6 +65,10 @@ export const services = sqliteTable("services", {
   //               syncAdcsCertificates() never deletes it when the CA disappears
   //               from the directory (it might live in another forest).
   customData: text("custom_data", { mode: "json" }).$type<Record<string, string>>().default({}),
+  // Which configured AD forest an adcs-type row was discovered in. Null for
+  // every other item type — only adcs sync (lib/ad/adcs.ts) ever sets it, and
+  // it's what disambiguates two forests whose CA DNs happen to collide.
+  directoryId: integer("directory_id"),
   // Renewal
   renewalUrl: text("renewal_url"),
   // Expiry
@@ -121,14 +125,84 @@ export const DIRECTORY_SOURCES = ['ad', 'entra'] as const;
 export type DirectorySource = (typeof DIRECTORY_SOURCES)[number];
 
 /**
- * Holds accounts from both directories. AD rows carry a real distinguishedName
- * and OU tree; Entra rows carry a synthetic ouPath built from the department so
- * the same tree/table UI renders both. objectGuid is scoped by source because
- * the two directories mint GUIDs independently.
+ * A configured connection to one client's AD forest or Entra tenant. An
+ * outsourcing admin monitors many of these; exactly one type='ad' row may have
+ * isPrimary=true — that is the ONLY directory AdminReminder itself ever binds
+ * against to authenticate a login (lib/ad/auth.ts). Every other row here is
+ * read-only: account inventory + expiry alerts, never login.
+ *
+ * directoryId is nullable at the SQLite level (ALTER TABLE ADD COLUMN cannot
+ * carry a per-row dynamic default), but every insert path in application code
+ * always supplies a real one — see lib/ad/sync.ts / lib/azure/users-sync.ts.
+ */
+export const directories = sqliteTable("directories", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  type: text("type", { enum: DIRECTORY_SOURCES }).notNull(),
+  label: text("label").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+  isPrimary: integer("is_primary", { mode: "boolean" }).notNull().default(false),
+
+  // AD connection fields — null when type='entra'.
+  url: text("url"),
+  startTls: integer("start_tls", { mode: "boolean" }).notNull().default(false),
+  allowInsecure: integer("allow_insecure", { mode: "boolean" }).notNull().default(false),
+  rejectUnauthorized: integer("reject_unauthorized", { mode: "boolean" }).notNull().default(true),
+  caCertPath: text("ca_cert_path"),
+  bindDn: text("bind_dn"),
+  bindPasswordEnc: text("bind_password_enc"),
+  baseDn: text("base_dn"),
+  /** Login role mapping — only meaningful/used on the isPrimary row. */
+  adminGroupDn: text("admin_group_dn"),
+  viewerGroupDn: text("viewer_group_dn"),
+
+  // Entra connection fields — null when type='ad'.
+  tenantId: text("tenant_id"),
+  clientId: text("client_id"),
+  clientSecretEnc: text("client_secret_enc"),
+
+  // Classification + notification defaults, per directory: naming conventions
+  // like "svc-*"/"sa-*" and acceptable lead times differ between client domains.
+  technicalOus: text("technical_ous"),
+  technicalPatterns: text("technical_patterns"),
+  functionalOus: text("functional_ous"),
+  functionalPatterns: text("functional_patterns"),
+  passwordDays: text("password_days"),
+  accountDays: text("account_days"),
+
+  // Scheduled sync cadence for THIS directory. Null inherits the global
+  // automation_cron (Ustawienia → Automatyzacja) — a client synced hourly and
+  // another once a day both read naturally as "this one is different", so the
+  // override lives per row rather than forcing one cadence on everyone.
+  syncCron: text("sync_cron"),
+
+  // Watchdog state, one row per directory instead of the old flat ad_health_* keys.
+  healthStatus: text("health_status", { enum: ["ok", "error", "unknown"] }).notNull().default("unknown"),
+  healthMessage: text("health_message"),
+  healthCheckedAt: integer("health_checked_at", { mode: "timestamp" }),
+
+  // Outcome of the last sync (scheduled or manual), mirroring the shape of the
+  // global automation_last_status/detail settings keys but per directory.
+  lastSyncedAt: integer("last_synced_at", { mode: "timestamp" }),
+  lastSyncStatus: text("last_sync_status", { enum: ["ok", "error"] }),
+  lastSyncDetail: text("last_sync_detail"),
+
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+});
+
+export type Directory = typeof directories.$inferSelect;
+export type NewDirectory = typeof directories.$inferInsert;
+
+/**
+ * Holds accounts from every configured directory. AD rows carry a real
+ * distinguishedName and OU tree; Entra rows carry a synthetic ouPath built from
+ * the department so the same tree/table UI renders both. objectGuid is scoped
+ * by directoryId (not just source) because two different AD forests mint GUIDs
+ * independently and a client's forest can otherwise collide with another's.
  */
 export const adAccounts = sqliteTable("ad_accounts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   source: text("source", { enum: DIRECTORY_SOURCES }).notNull().default('ad'),
+  directoryId: integer("directory_id"),
   // AD: objectGUID; Entra: the object id. Only stable identifier across renames.
   objectGuid: text("object_guid").notNull(),
   samAccountName: text("sam_account_name").notNull(),
@@ -162,7 +236,7 @@ export const adAccounts = sqliteTable("ad_accounts", {
   lastSyncedAt: integer("last_synced_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  sourceGuidIdx: uniqueIndex("idx_ad_accounts_source_guid").on(table.source, table.objectGuid),
+  directoryGuidIdx: uniqueIndex("idx_ad_accounts_directory_guid").on(table.directoryId, table.objectGuid),
   samIdx: index("idx_ad_accounts_sam").on(table.samAccountName),
   ouIdx: index("idx_ad_accounts_ou").on(table.ouPath),
   kindIdx: index("idx_ad_accounts_kind").on(table.kind),
@@ -196,10 +270,14 @@ export type AdNotifySide = (typeof AD_NOTIFY_SIDES)[number];
  *
  * `target` is the OU's distinguishedName, or `${source}:${objectGuid}` for an
  * account — the GUID, not the row id, so the policy survives a resync that
- * deletes and recreates the row.
+ * deletes and recreates the row. `target` alone is only unique WITHIN one
+ * directory: two client forests can and do reuse the same OU naming
+ * convention (e.g. both have "OU=Service Accounts,DC=corp,DC=local"), so
+ * uniqueness and lookup are always scoped by directoryId alongside target.
  */
 export const adNotifyPolicies = sqliteTable("ad_notify_policies", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  directoryId: integer("directory_id"),
   scope: text("scope", { enum: AD_NOTIFY_SCOPES }).notNull(),
   target: text("target").notNull(),
   /** False means "explicitly silent", which is not the same as having no policy. */
@@ -222,7 +300,11 @@ export const adNotifyPolicies = sqliteTable("ad_notify_policies", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
 }, (table) => ({
-  scopeTargetIdx: uniqueIndex("idx_ad_notify_scope_target").on(table.scope, table.target),
+  directoryScopeTargetIdx: uniqueIndex("idx_ad_notify_directory_scope_target").on(
+    table.directoryId,
+    table.scope,
+    table.target
+  ),
 }));
 
 export type AdNotifyPolicy = typeof adNotifyPolicies.$inferSelect;

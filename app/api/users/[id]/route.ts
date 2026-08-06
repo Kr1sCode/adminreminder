@@ -44,12 +44,6 @@ export async function PATCH(
   }
 
   if (typeof body?.mfaRequired === "boolean") {
-    if (target.authSource !== "local") {
-      return NextResponse.json(
-        { error: "MFA dotyczy tylko kont lokalnych (konta domenowe uwierzytelnia AD/Entra)." },
-        { status: 400 }
-      );
-    }
     await db.update(users).set({ mfaRequired: body.mfaRequired }).where(eq(users.id, userId));
     await recordAudit({
       actor: admin,
