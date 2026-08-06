@@ -278,7 +278,7 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
       </div>
 
       {(selectedDir || isNew) && (
-        <div className="space-y-6 max-w-xl">
+        <div className="space-y-6">
           {selectedDir && (
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-xs">{type === "ad" ? t("dir.typeAd") : t("dir.typeEntra")}</Badge>
@@ -297,7 +297,7 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
 
           <div>
             <Label>{t("dir.labelField")}</Label>
-            <Input value={form.label ?? ""} onChange={(e) => fv("label", e.target.value)}
+            <Input autoComplete="off" value={form.label ?? ""} onChange={(e) => fv("label", e.target.value)}
               placeholder={type === "ad" ? t("dir.labelPlaceholderAd") : t("dir.labelPlaceholderEntra")} className="mt-2" />
           </div>
 
@@ -306,22 +306,22 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label>{t("dir.url")}</Label>
-                  <Input value={form.url ?? ""} onChange={(e) => fv("url", e.target.value)}
+                  <Input autoComplete="off" value={form.url ?? ""} onChange={(e) => fv("url", e.target.value)}
                     placeholder="ldaps://dc01.klient.local" className="mt-2 font-mono" />
                 </div>
                 <div>
                   <Label>{t("dir.baseDn")}</Label>
-                  <Input value={form.baseDn ?? ""} onChange={(e) => fv("baseDn", e.target.value)}
+                  <Input autoComplete="off" value={form.baseDn ?? ""} onChange={(e) => fv("baseDn", e.target.value)}
                     placeholder="DC=klient,DC=local" className="mt-2 font-mono" />
                 </div>
                 <div>
                   <Label>{t("dir.bindDn")}</Label>
-                  <Input value={form.bindDn ?? ""} onChange={(e) => fv("bindDn", e.target.value)}
+                  <Input autoComplete="off" value={form.bindDn ?? ""} onChange={(e) => fv("bindDn", e.target.value)}
                     placeholder="CN=svc-ar,OU=Service Accounts,DC=klient,DC=local" className="mt-2 font-mono" />
                 </div>
                 <div>
                   <Label>{t("dir.bindPassword")}</Label>
-                  <Input type="password" value={form.bindPassword ?? ""} onChange={(e) => fv("bindPassword", e.target.value)} className="mt-2" />
+                  <Input autoComplete="off" type="password" value={form.bindPassword ?? ""} onChange={(e) => fv("bindPassword", e.target.value)} className="mt-2" />
                 </div>
               </div>
 
@@ -344,7 +344,7 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
                 </label>
                 <div>
                   <Label>{t("dir.caPath")}</Label>
-                  <Input value={form.caCertPath ?? ""} onChange={(e) => fv("caCertPath", e.target.value)}
+                  <Input autoComplete="off" value={form.caCertPath ?? ""} onChange={(e) => fv("caCertPath", e.target.value)}
                     placeholder="/etc/ssl/certs/klient-ca.pem" className="mt-2 font-mono" />
                 </div>
               </div>
@@ -355,11 +355,11 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>{t("set.ad.adminGroup")}</Label>
-                      <Input value={form.adminGroupDn ?? ""} onChange={(e) => fv("adminGroupDn", e.target.value)} className="mt-2 font-mono" />
+                      <Input autoComplete="off" value={form.adminGroupDn ?? ""} onChange={(e) => fv("adminGroupDn", e.target.value)} className="mt-2 font-mono" />
                     </div>
                     <div>
                       <Label>{t("set.ad.viewerGroup")}</Label>
-                      <Input value={form.viewerGroupDn ?? ""} onChange={(e) => fv("viewerGroupDn", e.target.value)} className="mt-2 font-mono" />
+                      <Input autoComplete="off" value={form.viewerGroupDn ?? ""} onChange={(e) => fv("viewerGroupDn", e.target.value)} className="mt-2 font-mono" />
                     </div>
                   </div>
                 </div>
@@ -369,17 +369,17 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>{t("dir.tenantId")}</Label>
-                <Input value={form.tenantId ?? ""} onChange={(e) => fv("tenantId", e.target.value)}
+                <Input autoComplete="off" value={form.tenantId ?? ""} onChange={(e) => fv("tenantId", e.target.value)}
                   placeholder="00000000-0000-0000-0000-000000000000" className="mt-2 font-mono" />
               </div>
               <div>
                 <Label>{t("dir.clientId")}</Label>
-                <Input value={form.clientId ?? ""} onChange={(e) => fv("clientId", e.target.value)}
+                <Input autoComplete="off" value={form.clientId ?? ""} onChange={(e) => fv("clientId", e.target.value)}
                   placeholder="00000000-0000-0000-0000-000000000000" className="mt-2 font-mono" />
               </div>
               <div className="md:col-span-2">
                 <Label>{t("dir.clientSecret")}</Label>
-                <Input type="password" value={form.clientSecret ?? ""} onChange={(e) => fv("clientSecret", e.target.value)} className="mt-2" />
+                <Input autoComplete="off" type="password" value={form.clientSecret ?? ""} onChange={(e) => fv("clientSecret", e.target.value)} className="mt-2" />
               </div>
             </div>
           )}
@@ -389,22 +389,22 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>{t("dir.techOu")}</Label>
-                <Input value={form.technicalOus ?? ""} onChange={(e) => fv("technicalOus", e.target.value)}
+                <Input autoComplete="off" value={form.technicalOus ?? ""} onChange={(e) => fv("technicalOus", e.target.value)}
                   placeholder="OU=Service Accounts,DC=klient,DC=local" className="mt-2 font-mono" />
               </div>
               <div>
                 <Label>{t("dir.techPatterns")}</Label>
-                <Input value={form.technicalPatterns ?? ""} onChange={(e) => fv("technicalPatterns", e.target.value)}
+                <Input autoComplete="off" value={form.technicalPatterns ?? ""} onChange={(e) => fv("technicalPatterns", e.target.value)}
                   placeholder="svc-*,svc_*,sa-*,sa_*,srv-*" className="mt-2 font-mono" />
               </div>
               <div>
                 <Label>{t("dir.funcOu")}</Label>
-                <Input value={form.functionalOus ?? ""} onChange={(e) => fv("functionalOus", e.target.value)}
+                <Input autoComplete="off" value={form.functionalOus ?? ""} onChange={(e) => fv("functionalOus", e.target.value)}
                   placeholder="OU=Shared,DC=klient,DC=local" className="mt-2 font-mono" />
               </div>
               <div>
                 <Label>{t("dir.funcPatterns")}</Label>
-                <Input value={form.functionalPatterns ?? ""} onChange={(e) => fv("functionalPatterns", e.target.value)}
+                <Input autoComplete="off" value={form.functionalPatterns ?? ""} onChange={(e) => fv("functionalPatterns", e.target.value)}
                   placeholder="func-*,role-*" className="mt-2 font-mono" />
               </div>
             </div>
@@ -415,12 +415,12 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>{t("dir.pwDays")}</Label>
-                <Input value={form.passwordDays ?? ""} onChange={(e) => fv("passwordDays", e.target.value)}
+                <Input autoComplete="off" value={form.passwordDays ?? ""} onChange={(e) => fv("passwordDays", e.target.value)}
                   placeholder="3,7,14" className="mt-2 font-mono" />
               </div>
               <div>
                 <Label>{t("dir.acctDays")}</Label>
-                <Input value={form.accountDays ?? ""} onChange={(e) => fv("accountDays", e.target.value)}
+                <Input autoComplete="off" value={form.accountDays ?? ""} onChange={(e) => fv("accountDays", e.target.value)}
                   placeholder="7,14,30" className="mt-2 font-mono" />
               </div>
             </div>
@@ -428,7 +428,7 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
 
           <div className="border-t border-border pt-4">
             <Label>{t("dir.schedule")}</Label>
-            <Input value={form.syncCron ?? ""} onChange={(e) => fv("syncCron", e.target.value)}
+            <Input autoComplete="off" value={form.syncCron ?? ""} onChange={(e) => fv("syncCron", e.target.value)}
               placeholder="0 */6 * * *" className="mt-2 font-mono" />
             <p className="text-xs text-muted-foreground mt-1">{t("dir.scheduleHint")}</p>
           </div>
