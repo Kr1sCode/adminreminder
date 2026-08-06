@@ -35,8 +35,10 @@ export async function GET() {
       ...item,
       computedStatus: cert.status,
       daysLeft: cert.daysLeft,
+      hoursLeft: cert.hoursLeft,
       domainStatus: domain?.status ?? null,
       domainDaysLeft: domain?.daysLeft ?? null,
+      domainHoursLeft: domain?.hoursLeft ?? null,
       typeLabel: ITEM_TYPE_LABELS[item.type as keyof typeof ITEM_TYPE_LABELS] || item.type,
     };
   });
