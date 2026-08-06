@@ -71,12 +71,14 @@ type Item = {
   lastCheckError: string | null;
   computedStatus: "ok" | "expiring" | "expired" | "error";
   daysLeft: number | null;
+  hoursLeft?: number | null;
   typeLabel?: string;
   /** Set when this row also watches the registration of the domain behind it. */
   domainName?: string | null;
   domainExpiryDate?: string | Date | null;
   domainStatus?: "ok" | "expiring" | "expired" | "error" | null;
   domainDaysLeft?: number | null;
+  domainHoursLeft?: number | null;
   domainLastCheckError?: string | null;
   notificationDays?: string | null;
   mutedUntil?: string | Date | null;
@@ -644,26 +646,36 @@ export function DashboardClient({
    * domain, so the badge carries only the time. The full sentence lives in the
    * tooltip: spelled out, it overflows the column on a laptop screen.
    */
+  /** "0 dni" covers anywhere from 1 minute to 23h59m left — under a column
+   *  headed with a day count that reads as "today" no matter how urgent it
+   *  actually is. hoursLeft (set only when daysLeft is 0) recovers that. */
+  function hoursPhrase(hoursLeft: number | null | undefined): string | null {
+    if (hoursLeft == null) return null;
+    if (hoursLeft <= 0) return t("exp.lessThanHour");
+    if (hoursLeft === 1) return t("exp.inHour");
+    return t("exp.inHours", { n: hoursLeft });
+  }
+
   /** "za 5 dni" / "in 5 days": the number alone, for the badge. */
-  function shortDays(days: number | null): string {
+  function shortDays(days: number | null, hoursLeft?: number | null): string {
     if (days === null) return t("common.none");
     if (days < 0) return t("exp.agoDays", { n: Math.abs(days) });
-    if (days === 0) return t("exp.today");
+    if (days === 0) return hoursPhrase(hoursLeft) ?? t("exp.today");
     if (days === 1) return t("exp.inDay");
     return t("exp.inDays", { n: days });
   }
 
   /** The full sentence, for the tooltip: a domain is renewed, not reissued. */
-  function describe(type: string, days: number | null): string {
+  function describe(type: string, days: number | null, hoursLeft?: number | null): string {
     if (days === null) return t("common.none");
-    const when = days === 0 ? t("exp.today") : days === 1 ? t("exp.inDay") : t("exp.inDays", { n: days });
+    const when = days === 0 ? (hoursPhrase(hoursLeft) ?? t("exp.today")) : days === 1 ? t("exp.inDay") : t("exp.inDays", { n: days });
     if (type === "domain") {
       return days < 0 ? t("exp.domainUnpaid", { n: Math.abs(days) }) : t("exp.domainRenew", { when });
     }
     return days < 0 ? t("exp.certExpired", { n: Math.abs(days) }) : t("exp.certExpires", { when });
   }
 
-  function getStatusBadge(status: string, daysLeft: number | null, type: string) {
+  function getStatusBadge(status: string, daysLeft: number | null, type: string, hoursLeft?: number | null) {
     if (status === "error") return <Badge className="status-error border">{t("dash.statusError")}</Badge>;
 
     // Inside urgentDays the amber "approaching" colour understates the problem:
@@ -674,8 +686,8 @@ export function DashboardClient({
       status === "ok" ? "status-ok" : urgent || status === "expired" ? "status-expired" : "status-expiring";
 
     return (
-      <Badge className={`${cls} border max-w-full whitespace-nowrap`} title={describe(type, daysLeft)}>
-        {shortDays(daysLeft)}
+      <Badge className={`${cls} border max-w-full whitespace-nowrap`} title={describe(type, daysLeft, hoursLeft)}>
+        {shortDays(daysLeft, hoursLeft)}
       </Badge>
     );
   }
@@ -918,14 +930,14 @@ export function DashboardClient({
                   <td className="px-5 py-4">
                     {isDomainOnly
                       ? <span className="text-muted-foreground text-xs">—</span>
-                      : getStatusBadge(item.computedStatus, item.daysLeft, item.type)}
+                      : getStatusBadge(item.computedStatus, item.daysLeft, item.type, item.hoursLeft)}
                   </td>
                   <td className="px-5 py-4">
                     {isDomainOnly ? (
-                      getStatusBadge(item.computedStatus, item.daysLeft, "domain")
+                      getStatusBadge(item.computedStatus, item.daysLeft, "domain", item.hoursLeft)
                     ) : item.domainName ? (
                       <>
-                        {getStatusBadge(item.domainStatus ?? "error", item.domainDaysLeft ?? null, "domain")}
+                        {getStatusBadge(item.domainStatus ?? "error", item.domainDaysLeft ?? null, "domain", item.domainHoursLeft)}
                         <div className="text-[10px] font-medium text-foreground/70 mt-1 font-mono truncate" title={item.domainName ?? undefined}>{item.domainName}</div>
                         {item.domainLastCheckError && (
                           <div className="text-red-500 dark:text-red-400 text-[10px] mt-0.5 truncate" title={item.domainLastCheckError ?? undefined}>
