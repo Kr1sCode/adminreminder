@@ -278,7 +278,7 @@ export function DirectoriesPanel({ type }: { type: "ad" | "entra" }) {
       </div>
 
       {(selectedDir || isNew) && (
-        <div className="space-y-6 max-w-xl">
+        <div className="space-y-6">
           {selectedDir && (
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-xs">{type === "ad" ? t("dir.typeAd") : t("dir.typeEntra")}</Badge>
