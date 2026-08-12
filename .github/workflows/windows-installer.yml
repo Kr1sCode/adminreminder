@@ -15,8 +15,7 @@ on:
 # "Workflow permissions" setting is switched to read/write - rather than
 # depend on that per-repo setting, grant it explicitly here so the "Attach to
 # release" step doesn't fail with "Resource not accessible by integration"
-# (happened on the very first tagged run, v1.2.0 - had to attach the .exe by
-# hand).
+# (happened on the public repo's first tagged run, v1.2.0).
 permissions:
   contents: write
 
@@ -56,13 +55,14 @@ jobs:
           Copy-Item $nodePath "dist/win/app/node.exe"
           & "dist/win/app/node.exe" --version
 
-      - name: Download NSSM (Windows service wrapper)
+      - name: Bundle NSSM (Windows service wrapper)
+        # Vendored in windows/vendor/nssm.exe (NSSM 2.24, win64) instead of
+        # fetching from nssm.cc at build time - that site has no uptime SLA
+        # and going down mid-release blocked every build until it recovered.
+        # Verified against the exact bytes nssm.cc served when it was still
+        # up (sha256 f689ee9af94b00e9e3f0bb072b34caaf207f32dcb4f5782fc9ca351df9a06c97).
         shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile "nssm.zip"
-          Expand-Archive -Path "nssm.zip" -DestinationPath "nssm-extracted"
-          Copy-Item "nssm-extracted/nssm-2.24/win64/nssm.exe" "dist/win/app/nssm.exe"
+        run: Copy-Item "windows/vendor/nssm.exe" "dist/win/app/nssm.exe"
 
       - name: Install Inno Setup
         shell: pwsh
