@@ -214,6 +214,16 @@ begin
     NssmExec('set AdminReminder AppRotateBytes 10485760');
     NssmExec('set AdminReminder AppExit Default Restart');
 
+    // Auto-update (lib/windows-updater.ts) spawns the downloaded installer as
+    // a detached child of this very service. "detached" only puts it in a new
+    // process group, not out of NSSM's Job Object — so when that installer's
+    // own ssInstall step runs "nssm stop AdminReminder" to unlock node.exe,
+    // the default kill-process-tree behavior kills the installer (and its
+    // nssm.exe sub-calls) along with the service, aborting the update
+    // mid-copy. AR never spawns any other child process, so there is nothing
+    // else this setting was protecting.
+    NssmExec('set AdminReminder AppKillProcessTree 0');
+
     // LAN reachability out of the box; the operator can tighten scope later —
     // this is the same trade-off the Docker demo image makes with 0.0.0.0.
     // Scoped to node.exe itself (program=), not "any process on this port":
